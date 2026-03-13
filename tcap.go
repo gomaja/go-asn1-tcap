@@ -181,14 +181,8 @@ func newDialogueRequest(acn, acnVersion int) *Dialogue {
 	return &Dialogue{
 		DialogAsId: DefaultDialogueAsId,
 		Request: &DialogueRequest{
-			ProtocolVersion: uint8Ptr(DefaultProtocolVersion),
-			ApplicationContextName: func() []uint64 {
-				newSlice := make([]uint64, len(DefaultAcnPrefix)+2)
-				copy(newSlice, DefaultAcnPrefix)
-				newSlice[len(DefaultAcnPrefix)] = uint64(acn)
-				newSlice[len(DefaultAcnPrefix)+1] = uint64(acnVersion)
-				return newSlice
-			}(),
+			ProtocolVersion:        uint8Ptr(DefaultProtocolVersion),
+			ApplicationContextName: buildACN(acn, acnVersion),
 		},
 	}
 }
@@ -197,14 +191,16 @@ func newDialogueResponse(acn, acnVersion int) *Dialogue {
 	return &Dialogue{
 		DialogAsId: DefaultDialogueAsId,
 		Response: &DialogueResponse{
-			ProtocolVersion: uint8Ptr(DefaultProtocolVersion),
-			ApplicationContextName: func() []uint64 {
-				acnSlice := make([]uint64, len(DefaultAcnPrefix)+2)
-				copy(acnSlice, DefaultAcnPrefix)
-				acnSlice[len(DefaultAcnPrefix)] = uint64(acn)
-				acnSlice[len(DefaultAcnPrefix)+1] = uint64(acnVersion)
-				return acnSlice
-			}(),
+			ProtocolVersion:        uint8Ptr(DefaultProtocolVersion),
+			ApplicationContextName: buildACN(acn, acnVersion),
 		},
 	}
+}
+
+func buildACN(acn, acnVersion int) []uint64 {
+	result := make([]uint64, len(DefaultAcnPrefix)+2)
+	copy(result, DefaultAcnPrefix)
+	result[len(DefaultAcnPrefix)] = uint64(acn)
+	result[len(DefaultAcnPrefix)+1] = uint64(acnVersion)
+	return result
 }
