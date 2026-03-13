@@ -7,17 +7,8 @@ import (
 
 // Sentinel errors for TCAP operations.
 var (
-	// ErrInvalidInput indicates invalid input data.
-	ErrInvalidInput = errors.New("invalid input data")
-
 	// ErrEmptyData indicates empty or nil data.
 	ErrEmptyData = errors.New("empty data provided")
-
-	// ErrUnmarshalFailed indicates BER unmarshal failure.
-	ErrUnmarshalFailed = errors.New("failed to unmarshal BER data")
-
-	// ErrMarshalFailed indicates BER marshal failure.
-	ErrMarshalFailed = errors.New("failed to marshal BER data")
 
 	// ErrInvalidTransactionID indicates invalid transaction ID.
 	ErrInvalidTransactionID = errors.New("invalid transaction ID")
