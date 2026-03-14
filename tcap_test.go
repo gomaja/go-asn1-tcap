@@ -379,6 +379,14 @@ func TestNewBegin_WithSubpackageConstants(t *testing.T) {
 		t.Fatal("expected *BeginTCAP")
 	}
 
+	if len(begin.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(begin.Components))
+	}
+
+	if begin.Components[0].Invoke == nil {
+		t.Fatal("expected Invoke component")
+	}
+
 	if begin.Components[0].Invoke.OpCode != gsmmap.OpCodeSendRoutingInfoForSM {
 		t.Errorf("expected opcode %d, got %d", gsmmap.OpCodeSendRoutingInfoForSM, begin.Components[0].Invoke.OpCode)
 	}
