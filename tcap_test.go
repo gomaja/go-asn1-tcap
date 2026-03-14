@@ -1,6 +1,7 @@
 package tcap
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 )
@@ -131,13 +132,13 @@ func TestParse_RealCaptures(t *testing.T) {
 				t.Errorf("expected message type %s, got %s", tc.msgType, parsed.MessageType())
 			}
 
-			// Roundtrip: marshal back and parse again, compare results.
+			// Roundtrip: marshal back and compare bytes.
 			marshalled, err := parsed.Marshal()
 			if err != nil {
 				t.Fatalf("failed to marshal: %v", err)
 			}
 
-			if hex.EncodeToString(tcapBytes) != hex.EncodeToString(marshalled) {
+			if !bytes.Equal(tcapBytes, marshalled) {
 				t.Errorf("roundtrip not stable:\n  first:  %s\n  second: %s",
 					hex.EncodeToString(tcapBytes), hex.EncodeToString(marshalled))
 			}

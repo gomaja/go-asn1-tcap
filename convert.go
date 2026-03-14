@@ -132,7 +132,9 @@ func convertAbortToAbortTCAP(ab *asn1tcap.Abort) (*AbortTCAP, error) {
 }
 
 func convertUnidirectionalToUnidirectionalTCAP(ud *asn1tcap.Unidirectional) (*UnidirectionalTCAP, error) {
-	result := &UnidirectionalTCAP{}
+	result := &UnidirectionalTCAP{
+		componentsIndef: ud.ComponentsIndef_,
+	}
 	if ud.DialoguePortion != nil {
 		dlg, err := convertDialoguePortionToDialogue(ud.DialoguePortion)
 		if err != nil {
@@ -604,7 +606,9 @@ func convertAbortTCAPToASN1(ab *AbortTCAP) (asn1tcap.TCMessage, error) {
 }
 
 func convertUnidirectionalTCAPToASN1(ud *UnidirectionalTCAP) (asn1tcap.TCMessage, error) {
-	uni := asn1tcap.Unidirectional{}
+	uni := asn1tcap.Unidirectional{
+		ComponentsIndef_: ud.componentsIndef,
+	}
 
 	if ud.Dialogue != nil {
 		dp, err := convertDialogueToDialoguePortion(ud.Dialogue)
