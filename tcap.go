@@ -33,24 +33,27 @@ type UnidirectionalTCAP struct {
 
 // BeginTCAP represents a TCAP transaction initiation message.
 type BeginTCAP struct {
-	Otid       TransactionID
-	Dialogue   *Dialogue
-	Components []Component
+	Otid            TransactionID
+	Dialogue        *Dialogue
+	Components      []Component
+	componentsIndef bool // true if original used indefinite-length encoding
 }
 
 // EndTCAP represents a TCAP transaction termination message.
 type EndTCAP struct {
-	Dtid       TransactionID
-	Dialogue   *Dialogue
-	Components []Component
+	Dtid            TransactionID
+	Dialogue        *Dialogue
+	Components      []Component
+	componentsIndef bool
 }
 
 // ContinueTCAP represents a TCAP transaction continuation message.
 type ContinueTCAP struct {
-	Otid       TransactionID
-	Dtid       TransactionID
-	Dialogue   *Dialogue
-	Components []Component
+	Otid            TransactionID
+	Dtid            TransactionID
+	Dialogue        *Dialogue
+	Components      []Component
+	componentsIndef bool
 }
 
 // AbortTCAP represents a TCAP transaction abort message.

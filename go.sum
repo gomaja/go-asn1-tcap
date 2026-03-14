@@ -1,2 +1,4 @@
 github.com/gomaja/go-asn1 v0.1.2 h1:Pzg3VtxNQZL987MrBdV/j+yJtz+WBajp63osS2ATrcg=
 github.com/gomaja/go-asn1 v0.1.2/go.mod h1:e1aXO5rnMK+OFSV7DZSk6ckpe3nYANwEEJrJGsE9foY=
+github.com/gomaja/go-asn1 v0.1.3 h1:VPEssOzonLi5RkxeQZlt4/8XoB93u0Itksat3iWYC0o=
+github.com/gomaja/go-asn1 v0.1.3/go.mod h1:e1aXO5rnMK+OFSV7DZSk6ckpe3nYANwEEJrJGsE9foY=
