@@ -3,6 +3,8 @@ package tcap
 import (
 	"errors"
 	"fmt"
+
+	asn1tcap "github.com/gomaja/go-asn1/telecom/ss7/tcap"
 )
 
 // MessageType identifies the type of TCAP message.
@@ -60,7 +62,7 @@ type ContinueTCAP struct {
 // AbortTCAP represents a TCAP transaction abort message.
 type AbortTCAP struct {
 	Dtid        TransactionID
-	PAbortCause *int64
+	PAbortCause *asn1tcap.PAbortCause
 	UAbortCause []byte // raw dialogue portion bytes for user abort
 }
 
@@ -98,11 +100,11 @@ type ReturnError struct {
 
 // Reject represents a TCAP reject component.
 type Reject struct {
-	InvokeID            *int   // nil means not derivable
-	GeneralProblem      *int64
-	InvokeProblem       *int64
-	ReturnResultProblem *int64
-	ReturnErrorProblem  *int64
+	InvokeID            *int                        // nil means not derivable
+	GeneralProblem      *asn1tcap.GeneralProblem
+	InvokeProblem       *asn1tcap.InvokeProblem
+	ReturnResultProblem *asn1tcap.ReturnResultProblem
+	ReturnErrorProblem  *asn1tcap.ReturnErrorProblem
 }
 
 // Dialogue holds the dialogue portion of a TCAP message.
@@ -125,7 +127,7 @@ type DialogueRequest struct {
 type DialogueResponse struct {
 	ProtocolVersion        *uint8
 	ApplicationContextName []uint64 // OID
-	Result                 int64
+	Result                 asn1tcap.AssociateResult
 	ResultSourceDiagnostic ResultSourceDiagnostic
 	UserInformation        []byte
 }
@@ -138,7 +140,7 @@ type ResultSourceDiagnostic struct {
 
 // DialogueAbort represents an ABRT APDU.
 type DialogueAbort struct {
-	AbortSource     int64
+	AbortSource     asn1tcap.ABRTSource
 	UserInformation []byte
 }
 

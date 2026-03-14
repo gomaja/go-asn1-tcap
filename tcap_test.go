@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"testing"
+
+	"github.com/gomaja/go-asn1-tcap/gsmmap"
 )
 
 // Test data from real TCAP captures (same as go-tcap test suite).
@@ -346,6 +348,47 @@ func TestDialogueResponseFromRequest_Nil(t *testing.T) {
 	}
 	if resp != nil {
 		t.Fatal("expected nil response for nil request")
+	}
+}
+
+func TestNewBegin_WithSubpackageConstants(t *testing.T) {
+	msg, err := NewBegin([]byte{0x00, 0x47, 0x34, 0xa8},
+		WithBeginDialogueRequest(gsmmap.ShortMsgGatewayContext, gsmmap.Version3),
+		WithBeginInvoke(0, gsmmap.OpCodeSendRoutingInfoForSM, hexDecode(t, "800891328490507608f38101ff820891328490000005f7")),
+	)
+	if err != nil {
+		t.Fatalf("NewBegin: %v", err)
+	}
+
+	marshalled, err := msg.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	parsed, err := Parse(marshalled)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if parsed.MessageType() != MessageTypeBegin {
+		t.Errorf("expected Begin, got %s", parsed.MessageType())
+	}
+
+	begin, ok := parsed.(*BeginTCAP)
+	if !ok {
+		t.Fatal("expected *BeginTCAP")
+	}
+
+	if len(begin.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(begin.Components))
+	}
+
+	if begin.Components[0].Invoke == nil {
+		t.Fatal("expected Invoke component")
+	}
+
+	if begin.Components[0].Invoke.OpCode != gsmmap.OpCodeSendRoutingInfoForSM {
+		t.Errorf("expected opcode %d, got %d", gsmmap.OpCodeSendRoutingInfoForSM, begin.Components[0].Invoke.OpCode)
 	}
 }
 

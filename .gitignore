@@ -1,3 +1,13 @@
-.claude
-.idea
+# IDE
+.idea/
+.vscode/
+.claude/
+*.swp
 plans/
+docs/
+
+# OS
+.DS_Store
+
+# Local dev
+local_test*/
