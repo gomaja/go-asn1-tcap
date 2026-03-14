@@ -8,6 +8,17 @@
 // CAP service context of a transaction.
 package camel
 
+// AcnVersion represents a CAMEL Application Context Name version number.
+// Reference: 3GPP TS 29.078
+type AcnVersion = int
+
+const (
+	Version1 AcnVersion = 1
+	Version2 AcnVersion = 2
+	Version3 AcnVersion = 3
+	Version4 AcnVersion = 4
+)
+
 // ApplicationContextName represents a CAMEL Application Context Name.
 // These values form part of the ACN OID: 0.4.0.0.1.0.<acn>.<version>
 type ApplicationContextName = int
