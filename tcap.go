@@ -27,30 +27,34 @@ type TransactionID []byte
 
 // UnidirectionalTCAP represents a one-way TCAP message.
 type UnidirectionalTCAP struct {
-	Dialogue   *Dialogue
-	Components []Component
+	Dialogue        *Dialogue
+	Components      []Component
+	componentsIndef bool // true if original used indefinite-length encoding
 }
 
 // BeginTCAP represents a TCAP transaction initiation message.
 type BeginTCAP struct {
-	Otid       TransactionID
-	Dialogue   *Dialogue
-	Components []Component
+	Otid            TransactionID
+	Dialogue        *Dialogue
+	Components      []Component
+	componentsIndef bool // true if original used indefinite-length encoding
 }
 
 // EndTCAP represents a TCAP transaction termination message.
 type EndTCAP struct {
-	Dtid       TransactionID
-	Dialogue   *Dialogue
-	Components []Component
+	Dtid            TransactionID
+	Dialogue        *Dialogue
+	Components      []Component
+	componentsIndef bool // true if original used indefinite-length encoding
 }
 
 // ContinueTCAP represents a TCAP transaction continuation message.
 type ContinueTCAP struct {
-	Otid       TransactionID
-	Dtid       TransactionID
-	Dialogue   *Dialogue
-	Components []Component
+	Otid            TransactionID
+	Dtid            TransactionID
+	Dialogue        *Dialogue
+	Components      []Component
+	componentsIndef bool // true if original used indefinite-length encoding
 }
 
 // AbortTCAP represents a TCAP transaction abort message.

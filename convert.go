@@ -47,7 +47,8 @@ func convertTCMessageToTCAP(msg *asn1tcap.TCMessage) (TCAP, error) {
 
 func convertBeginToBeginTCAP(bn *asn1tcap.Begin) (*BeginTCAP, error) {
 	result := &BeginTCAP{
-		Otid: TransactionID(bn.Otid),
+		Otid:            TransactionID(bn.Otid),
+		componentsIndef: bn.ComponentsIndef_,
 	}
 	if bn.DialoguePortion != nil {
 		dlg, err := convertDialoguePortionToDialogue(bn.DialoguePortion)
@@ -68,7 +69,8 @@ func convertBeginToBeginTCAP(bn *asn1tcap.Begin) (*BeginTCAP, error) {
 
 func convertEndToEndTCAP(ed *asn1tcap.End) (*EndTCAP, error) {
 	result := &EndTCAP{
-		Dtid: TransactionID(ed.Dtid),
+		Dtid:            TransactionID(ed.Dtid),
+		componentsIndef: ed.ComponentsIndef_,
 	}
 	if ed.DialoguePortion != nil {
 		dlg, err := convertDialoguePortionToDialogue(ed.DialoguePortion)
@@ -89,8 +91,9 @@ func convertEndToEndTCAP(ed *asn1tcap.End) (*EndTCAP, error) {
 
 func convertContinueToContinueTCAP(ct *asn1tcap.Continue) (*ContinueTCAP, error) {
 	result := &ContinueTCAP{
-		Otid: TransactionID(ct.Otid),
-		Dtid: TransactionID(ct.Dtid),
+		Otid:            TransactionID(ct.Otid),
+		Dtid:            TransactionID(ct.Dtid),
+		componentsIndef: ct.ComponentsIndef_,
 	}
 	if ct.DialoguePortion != nil {
 		dlg, err := convertDialoguePortionToDialogue(ct.DialoguePortion)
@@ -129,7 +132,9 @@ func convertAbortToAbortTCAP(ab *asn1tcap.Abort) (*AbortTCAP, error) {
 }
 
 func convertUnidirectionalToUnidirectionalTCAP(ud *asn1tcap.Unidirectional) (*UnidirectionalTCAP, error) {
-	result := &UnidirectionalTCAP{}
+	result := &UnidirectionalTCAP{
+		componentsIndef: ud.ComponentsIndef_,
+	}
 	if ud.DialoguePortion != nil {
 		dlg, err := convertDialoguePortionToDialogue(ud.DialoguePortion)
 		if err != nil {
@@ -509,7 +514,8 @@ func collectUserInformationBytes(userInfo []runtime.RawValue) []byte {
 
 func convertBeginTCAPToASN1(bn *BeginTCAP) (asn1tcap.TCMessage, error) {
 	begin := asn1tcap.Begin{
-		Otid: asn1tcap.OrigTransactionID(bn.Otid),
+		Otid:             asn1tcap.OrigTransactionID(bn.Otid),
+		ComponentsIndef_: bn.componentsIndef,
 	}
 
 	if bn.Dialogue != nil {
@@ -533,7 +539,8 @@ func convertBeginTCAPToASN1(bn *BeginTCAP) (asn1tcap.TCMessage, error) {
 
 func convertEndTCAPToASN1(ed *EndTCAP) (asn1tcap.TCMessage, error) {
 	end := asn1tcap.End{
-		Dtid: asn1tcap.DestTransactionID(ed.Dtid),
+		Dtid:             asn1tcap.DestTransactionID(ed.Dtid),
+		ComponentsIndef_: ed.componentsIndef,
 	}
 
 	if ed.Dialogue != nil {
@@ -557,8 +564,9 @@ func convertEndTCAPToASN1(ed *EndTCAP) (asn1tcap.TCMessage, error) {
 
 func convertContinueTCAPToASN1(ct *ContinueTCAP) (asn1tcap.TCMessage, error) {
 	cont := asn1tcap.Continue{
-		Otid: asn1tcap.OrigTransactionID(ct.Otid),
-		Dtid: asn1tcap.DestTransactionID(ct.Dtid),
+		Otid:             asn1tcap.OrigTransactionID(ct.Otid),
+		Dtid:             asn1tcap.DestTransactionID(ct.Dtid),
+		ComponentsIndef_: ct.componentsIndef,
 	}
 
 	if ct.Dialogue != nil {
@@ -598,7 +606,9 @@ func convertAbortTCAPToASN1(ab *AbortTCAP) (asn1tcap.TCMessage, error) {
 }
 
 func convertUnidirectionalTCAPToASN1(ud *UnidirectionalTCAP) (asn1tcap.TCMessage, error) {
-	uni := asn1tcap.Unidirectional{}
+	uni := asn1tcap.Unidirectional{
+		ComponentsIndef_: ud.componentsIndef,
+	}
 
 	if ud.Dialogue != nil {
 		dp, err := convertDialogueToDialoguePortion(ud.Dialogue)

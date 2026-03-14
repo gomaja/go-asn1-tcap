@@ -1,6 +1,7 @@
 package tcap
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 )
@@ -108,6 +109,11 @@ func TestParse_RealCaptures(t *testing.T) {
 			input:   "672d490403c93f576b252823060700118605010101a0186416800100be11280f060704000001010101a004a4028000",
 			msgType: MessageTypeAbort,
 		},
+		{
+			name:    "Camel-V2 invoke initialDP (CapGsmssfToGsmscfContext)",
+			input:   "6281a94804b70801a16b1e281c060700118605010101a011600f80020780a1090607040000010032016c80a17d020100020100307580010183070313890027821785010a8a088493975617699909bb0580038090a39c01029f320852507017322911f7bf34170201008107919756176999f9a309800752f099d05b37d0bf35038301119f3605f943d000039f3707919756176999f99f3807819830535304f99f390802420122806080020000",
+			msgType: MessageTypeBegin,
+		},
 	}
 
 	for _, tc := range tests {
@@ -124,6 +130,17 @@ func TestParse_RealCaptures(t *testing.T) {
 
 			if parsed.MessageType() != tc.msgType {
 				t.Errorf("expected message type %s, got %s", tc.msgType, parsed.MessageType())
+			}
+
+			// Roundtrip: marshal back and compare bytes.
+			marshalled, err := parsed.Marshal()
+			if err != nil {
+				t.Fatalf("failed to marshal: %v", err)
+			}
+
+			if !bytes.Equal(tcapBytes, marshalled) {
+				t.Errorf("roundtrip not stable:\n  first:  %s\n  second: %s",
+					hex.EncodeToString(tcapBytes), hex.EncodeToString(marshalled))
 			}
 		})
 	}
