@@ -185,7 +185,7 @@ func validateInvokeID(invID int, fieldName string) error {
 
 func newDialogueRequest(acn, acnVersion int) *Dialogue {
 	return &Dialogue{
-		DialogAsId: DefaultDialogueAsId,
+		DialogAsId: asn1tcap.DialogueAsId(),
 		Request: &DialogueRequest{
 			ProtocolVersion:        uint8Ptr(DefaultProtocolVersion),
 			ApplicationContextName: buildACN(acn, acnVersion),
@@ -195,7 +195,7 @@ func newDialogueRequest(acn, acnVersion int) *Dialogue {
 
 func newDialogueResponse(acn, acnVersion int) *Dialogue {
 	return &Dialogue{
-		DialogAsId: DefaultDialogueAsId,
+		DialogAsId: asn1tcap.DialogueAsId(),
 		Response: &DialogueResponse{
 			ProtocolVersion:        uint8Ptr(DefaultProtocolVersion),
 			ApplicationContextName: buildACN(acn, acnVersion),

@@ -787,7 +787,7 @@ func convertDialogueToDialoguePortion(dlg *Dialogue) (*asn1tcap.DialoguePortion,
 	// Encode the dialogue AS OID
 	dialogAsId := dlg.DialogAsId
 	if dialogAsId == nil {
-		dialogAsId = DefaultDialogueAsId
+		dialogAsId = asn1tcap.DialogueAsId()
 	}
 	externalChildren = append(externalChildren, ber.EncodeObjectIdentifier(dialogAsId)...)
 

@@ -17,11 +17,5 @@ const (
 	DefaultProtocolVersion = 0x80 // 128 decimal
 )
 
-// Dialogue ASN.1 Object Identifier constants.
-var (
-	// DefaultDialogueAsId represents the standard TCAP dialogue object identifier.
-	DefaultDialogueAsId = []uint64{0, 0, 17, 773, 1, 1, 1}
-
-	// DefaultAcnPrefix represents the prefix for the Application Context Name (ACN).
-	DefaultAcnPrefix = []uint64{0, 4, 0, 0, 1, 0}
-)
+// DefaultAcnPrefix represents the prefix for the Application Context Name (ACN).
+var DefaultAcnPrefix = []uint64{0, 4, 0, 0, 1, 0}
