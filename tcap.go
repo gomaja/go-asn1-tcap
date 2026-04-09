@@ -185,7 +185,7 @@ func validateInvokeID(invID int, fieldName string) error {
 
 func newDialogueRequest(acn, acnVersion int) *Dialogue {
 	return &Dialogue{
-		DialogAsId: DefaultDialogueAsId,
+		DialogAsId: asn1tcap.DialogueAsId(),
 		Request: &DialogueRequest{
 			ProtocolVersion:        uint8Ptr(DefaultProtocolVersion),
 			ApplicationContextName: buildACN(acn, acnVersion),
@@ -195,7 +195,7 @@ func newDialogueRequest(acn, acnVersion int) *Dialogue {
 
 func newDialogueResponse(acn, acnVersion int) *Dialogue {
 	return &Dialogue{
-		DialogAsId: DefaultDialogueAsId,
+		DialogAsId: asn1tcap.DialogueAsId(),
 		Response: &DialogueResponse{
 			ProtocolVersion:        uint8Ptr(DefaultProtocolVersion),
 			ApplicationContextName: buildACN(acn, acnVersion),
@@ -204,9 +204,6 @@ func newDialogueResponse(acn, acnVersion int) *Dialogue {
 }
 
 func buildACN(acn, acnVersion int) []uint64 {
-	result := make([]uint64, len(DefaultAcnPrefix)+2)
-	copy(result, DefaultAcnPrefix)
-	result[len(DefaultAcnPrefix)] = uint64(acn)
-	result[len(DefaultAcnPrefix)+1] = uint64(acnVersion)
-	return result
+	prefix := DefaultAcnPrefix()
+	return append(prefix, uint64(acn), uint64(acnVersion))
 }
