@@ -17,5 +17,10 @@ const (
 	DefaultProtocolVersion = 0x80 // 128 decimal
 )
 
-// DefaultAcnPrefix represents the prefix for the Application Context Name (ACN).
-var DefaultAcnPrefix = []uint64{0, 4, 0, 0, 1, 0}
+// defaultAcnPrefix is the base OID prefix for Application Context Names (ACN).
+var defaultAcnPrefix = []uint64{0, 4, 0, 0, 1, 0}
+
+// DefaultAcnPrefix returns a copy of the ACN OID prefix: 0.4.0.0.1.0
+func DefaultAcnPrefix() []uint64 {
+	return append([]uint64(nil), defaultAcnPrefix...)
+}
