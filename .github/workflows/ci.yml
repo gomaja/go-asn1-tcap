@@ -131,6 +131,12 @@ jobs:
           - kind: cross-build-linux-arm
             os: ubuntu-latest
             command: GOOS=linux GOARCH=arm CGO_ENABLED=0 go build ./...
+          - kind: cross-build-linux-s390x
+            os: ubuntu-latest
+            command: GOOS=linux GOARCH=s390x CGO_ENABLED=0 go build ./...
+          - kind: cross-build-linux-mips
+            os: ubuntu-latest
+            command: GOOS=linux GOARCH=mips CGO_ENABLED=0 go build ./...
           - kind: macos
             os: macos-latest
             command: go test ./... -short -count=1 -timeout 900s
