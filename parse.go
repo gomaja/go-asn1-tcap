@@ -13,6 +13,9 @@ func Parse(data []byte) (TCAP, error) {
 
 	var msg asn1tcap.TCMessage
 	if err := msg.UnmarshalBER(data); err != nil {
+		if result, relaxedErr := parseTCMessageRelaxed(data); relaxedErr == nil {
+			return result, nil
+		}
 		return nil, newParseError("Parse", "UnmarshalBER", err)
 	}
 
