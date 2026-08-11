@@ -93,14 +93,14 @@ type ReturnResult struct {
 
 // ReturnError represents a TCAP return error component.
 type ReturnError struct {
-	InvokeID  int    // range -128 to 127
+	InvokeID  int // range -128 to 127
 	ErrorCode int64
 	Parameter []byte // raw BER-encoded parameter
 }
 
 // Reject represents a TCAP reject component.
 type Reject struct {
-	InvokeID            *int                        // nil means not derivable
+	InvokeID            *int // nil means not derivable
 	GeneralProblem      *asn1tcap.GeneralProblem
 	InvokeProblem       *asn1tcap.InvokeProblem
 	ReturnResultProblem *asn1tcap.ReturnResultProblem

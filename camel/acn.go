@@ -24,7 +24,7 @@ const (
 type ApplicationContextName = int
 
 const (
-	CapGsmssfToGsmscfContext             ApplicationContextName = 50
+	CapGsmssfToGsmscfContext              ApplicationContextName = 50
 	CapAssistHandoffGsmssfToGsmscfContext ApplicationContextName = 51
-	CapGsmSRFToGsmscfContext             ApplicationContextName = 52
+	CapGsmSRFToGsmscfContext              ApplicationContextName = 52
 )

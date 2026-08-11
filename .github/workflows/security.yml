@@ -1,0 +1,210 @@
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+jobs:
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@v5.0.0
+        with:
+          fail-on-severity: moderate
+
+  dependency-scanning:
+    name: dependency scanning
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: true
+      - name: govulncheck
+        id: govulncheck
+        shell: bash
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          set +e
+          "$(go env GOPATH)/bin/govulncheck" ./... 2>&1 | tee govulncheck.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          case "$status" in
+            0|3)
+              echo "status=$status" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              exit "$status"
+              ;;
+          esac
+      - name: Report scheduled dependency findings
+        if: github.event_name == 'schedule' && steps.govulncheck.outputs.status == '3'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Security scan: dependency findings'
+          BODY: |
+            The scheduled dependency scan found findings that need review.
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            The issue intentionally contains no vulnerability details beyond the scan category. Review the run output and security alerts before publishing remediation detail.
+        run: |
+          set -euo pipefail
+          gh label create security --color d73a4a --description "Security follow-up" 2>/dev/null || true
+          existing="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --label security --body "$BODY"
+          fi
+      - name: Fail on dependency findings
+        if: steps.govulncheck.outputs.status == '3'
+        run: exit 1
+
+  sast:
+    name: sast
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@v4.37.4
+        with:
+          languages: go
+          queries: security-extended,security-and-quality
+      - uses: github/codeql-action/autobuild@v4.37.4
+      - uses: github/codeql-action/analyze@v4.37.4
+        with:
+          category: codeql-go
+      - name: Count scheduled CodeQL alerts
+        if: github.event_name == 'schedule'
+        id: codeql_alerts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if count="$(gh api --paginate -X GET "repos/${GITHUB_REPOSITORY}/code-scanning/alerts" \
+              -f state=open \
+              -f tool_name=CodeQL \
+              -f ref=refs/heads/main \
+              -F per_page=100 \
+              | jq -s 'add | length')"; then
+              echo "count=$count" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "failed to query CodeQL alerts" >&2
+          exit 1
+      - name: Report scheduled SAST findings
+        if: github.event_name == 'schedule' && steps.codeql_alerts.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Security scan: SAST findings'
+          BODY: |
+            The scheduled SAST scan has open CodeQL alerts that need review.
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Alerts: ${{ github.server_url }}/${{ github.repository }}/security/code-scanning?query=tool%3ACodeQL+is%3Aopen
+
+            The issue intentionally contains no alert details beyond the scan category. Review the security alert before publishing remediation detail.
+        run: |
+          set -euo pipefail
+          gh label create security --color d73a4a --description "Security follow-up" 2>/dev/null || true
+          existing="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --label security --body "$BODY"
+          fi
+      - name: Fail on scheduled SAST findings
+        if: github.event_name == 'schedule' && steps.codeql_alerts.outputs.count != '0'
+        run: exit 1
+
+  secret-detection:
+    name: secret detection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: true
+      - name: gitleaks
+        id: gitleaks
+        shell: bash
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          set +e
+          "$(go env GOPATH)/bin/gitleaks" detect --source . --redact --exit-code 1 2>&1 | tee gitleaks.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          case "$status" in
+            0|1)
+              echo "status=$status" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              exit "$status"
+              ;;
+          esac
+      - name: Report scheduled secret-detection findings
+        if: github.event_name == 'schedule' && steps.gitleaks.outputs.status == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Security scan: secret-detection findings'
+          BODY: |
+            The scheduled secret-detection scan found findings that need review.
+
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            The issue intentionally contains no secret values or locations. Review the security alert before publishing any remediation detail.
+        run: |
+          set -euo pipefail
+          gh label create security --color d73a4a --description "Security follow-up" 2>/dev/null || true
+          existing="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --label security --body "$BODY"
+          fi
+      - name: Fail on secret-detection findings
+        if: steps.gitleaks.outputs.status == '1'
+        run: exit 1
