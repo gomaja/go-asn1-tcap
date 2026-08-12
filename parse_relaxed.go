@@ -315,12 +315,16 @@ func parseReturnResultContentRelaxed(content []byte) (*ReturnResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decoding result: %w", err)
 		}
-		opCode, parameter, err := decodeResultRetRes(content[offset : offset+n])
+		var resultValue asn1tcap.ReturnResultResult
+		if err := resultValue.UnmarshalBER(content[offset : offset+n]); err != nil {
+			return nil, fmt.Errorf("decoding result: %w", err)
+		}
+		opCode, err := decodeOpCodeFromRawValue(resultValue.Opcode)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decoding result opcode: %w", err)
 		}
 		result.OpCode = &opCode
-		result.Parameter = copyBytes(parameter)
+		result.Parameter = copyBytes(resultValue.Result.Bytes)
 		offset += n
 	}
 	if offset != len(content) {
@@ -406,7 +410,7 @@ func decodeInvokeIDTLV(data []byte) (int, bool, int, error) {
 	if invokeID.Choice != asn1tcap.InvokeIdChoicePresent {
 		return 0, false, n, nil
 	}
-	value, err := convertASN1InvokeIDToInt(invokeID.Present)
+	value, _, err := invokeIDFromASN1(invokeID)
 	if err != nil {
 		return 0, false, 0, err
 	}
