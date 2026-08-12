@@ -121,7 +121,8 @@ func convertAbortToAbortTCAP(ab *asn1tcap.Abort) (*AbortTCAP, error) {
 		switch ab.Reason.Choice {
 		case asn1tcap.AbortReasonChoicePAbortCause:
 			if ab.Reason.PAbortCause != nil {
-				result.PAbortCause = ab.Reason.PAbortCause
+				pAbortCause := *ab.Reason.PAbortCause
+				result.PAbortCause = &pAbortCause
 			}
 		case asn1tcap.AbortReasonChoiceUAbortCause:
 			if ab.Reason.UAbortCause != nil {
@@ -241,21 +242,17 @@ func convertASN1InvokeToInvoke(inv *asn1tcap.Invoke) (*Invoke, error) {
 	result := &Invoke{}
 
 	// InvokeID
-	if inv.InvokeId.Choice == asn1tcap.InvokeIdChoicePresent && inv.InvokeId.Present != nil {
-		invokeID, err := convertASN1InvokeIDToInt(inv.InvokeId.Present)
-		if err != nil {
-			return nil, err
-		}
+	if invokeID, ok, err := invokeIDFromASN1(inv.InvokeId); err != nil {
+		return nil, fmt.Errorf("decoding invoke ID: %w", err)
+	} else if ok {
 		result.InvokeID = invokeID
 	}
 
 	// LinkedID
 	if inv.LinkedId != nil && inv.LinkedId.Choice == asn1tcap.InvokeLinkedIdChoicePresent && inv.LinkedId.Present != nil {
-		if inv.LinkedId.Present.Choice == asn1tcap.InvokeIdChoicePresent && inv.LinkedId.Present.Present != nil {
-			linkedID, err := convertASN1InvokeIDToInt(inv.LinkedId.Present.Present)
-			if err != nil {
-				return nil, err
-			}
+		if linkedID, ok, err := invokeIDFromASN1(*inv.LinkedId.Present); err != nil {
+			return nil, fmt.Errorf("decoding linked invoke ID: %w", err)
+		} else if ok {
 			result.LinkedID = intPtr(linkedID)
 		}
 	}
@@ -279,19 +276,16 @@ func convertASN1ReturnResultToReturnResult(rr *asn1tcap.ReturnResult) (*ReturnRe
 	result := &ReturnResult{}
 
 	// InvokeID
-	if rr.InvokeId.Choice == asn1tcap.InvokeIdChoicePresent && rr.InvokeId.Present != nil {
-		invokeID, err := convertASN1InvokeIDToInt(rr.InvokeId.Present)
-		if err != nil {
-			return nil, err
-		}
+	if invokeID, ok, err := invokeIDFromASN1(rr.InvokeId); err != nil {
+		return nil, fmt.Errorf("decoding invoke ID: %w", err)
+	} else if ok {
 		result.InvokeID = invokeID
 	}
 
-	// Result contains opcode + parameter as a structured SEQUENCE.
 	if rr.Result != nil {
 		opCode, err := decodeOpCodeFromRawValue(rr.Result.Opcode)
 		if err != nil {
-			return nil, fmt.Errorf("decoding result: %w", err)
+			return nil, fmt.Errorf("decoding result opcode: %w", err)
 		}
 		result.OpCode = &opCode
 		result.Parameter = rr.Result.Result.Bytes
@@ -304,11 +298,9 @@ func convertASN1ReturnErrorToReturnError(re *asn1tcap.ReturnError) (*ReturnError
 	result := &ReturnError{}
 
 	// InvokeID
-	if re.InvokeId.Choice == asn1tcap.InvokeIdChoicePresent && re.InvokeId.Present != nil {
-		invokeID, err := convertASN1InvokeIDToInt(re.InvokeId.Present)
-		if err != nil {
-			return nil, err
-		}
+	if invokeID, ok, err := invokeIDFromASN1(re.InvokeId); err != nil {
+		return nil, fmt.Errorf("decoding invoke ID: %w", err)
+	} else if ok {
 		result.InvokeID = invokeID
 	}
 
@@ -331,11 +323,9 @@ func convertASN1RejectToReject(rj *asn1tcap.Reject) (*Reject, error) {
 	result := &Reject{}
 
 	// InvokeID — can be present (integer) or absent (null = not derivable)
-	if rj.InvokeId.Choice == asn1tcap.InvokeIdChoicePresent && rj.InvokeId.Present != nil {
-		invokeID, err := convertASN1InvokeIDToInt(rj.InvokeId.Present)
-		if err != nil {
-			return nil, err
-		}
+	if invokeID, ok, err := invokeIDFromASN1(rj.InvokeId); err != nil {
+		return nil, fmt.Errorf("decoding invoke ID: %w", err)
+	} else if ok {
 		result.InvokeID = intPtr(invokeID)
 	}
 	// if Absent or unset, InvokeID stays nil (not derivable)
@@ -676,19 +666,28 @@ func convertComponentToASN1Component(comp *Component) (asn1tcap.Component, error
 	}
 
 	if comp.ReturnResultLast != nil {
-		rr := convertReturnResultToASN1ReturnResult(comp.ReturnResultLast)
+		rr, err := convertReturnResultToASN1ReturnResult(comp.ReturnResultLast)
+		if err != nil {
+			return asn1tcap.Component{}, fmt.Errorf("converting return result last: %w", err)
+		}
 		ros := asn1tcap.NewROSReturnResult(rr)
 		return asn1tcap.NewComponentBasicROS(ros), nil
 	}
 
 	if comp.ReturnResultNotLast != nil {
-		rr := convertReturnResultToASN1ReturnResult(comp.ReturnResultNotLast)
+		rr, err := convertReturnResultToASN1ReturnResult(comp.ReturnResultNotLast)
+		if err != nil {
+			return asn1tcap.Component{}, fmt.Errorf("converting return result not last: %w", err)
+		}
 		ros := asn1tcap.NewROSReturnResult(rr)
 		return asn1tcap.NewComponentReturnResultNotLast(ros), nil
 	}
 
 	if comp.ReturnError != nil {
-		re := convertReturnErrorToASN1ReturnError(comp.ReturnError)
+		re, err := convertReturnErrorToASN1ReturnError(comp.ReturnError)
+		if err != nil {
+			return asn1tcap.Component{}, fmt.Errorf("converting return error: %w", err)
+		}
 		ros := asn1tcap.NewROSReturnError(re)
 		return asn1tcap.NewComponentBasicROS(ros), nil
 	}
@@ -718,45 +717,60 @@ func convertInvokeToASN1Invoke(inv *Invoke) (asn1tcap.Invoke, error) {
 	result.Opcode = runtime.RawValue{Bytes: opcodeBytes}
 
 	if inv.Parameter != nil {
-		param := runtime.RawValue{Bytes: inv.Parameter}
+		parameter, err := normalizeParameterTLV(inv.Parameter)
+		if err != nil {
+			return asn1tcap.Invoke{}, fmt.Errorf("normalizing argument: %w", err)
+		}
+		param := runtime.RawValue{Bytes: parameter}
 		result.Argument = &param
 	}
 
 	return result, nil
 }
 
-func convertReturnResultToASN1ReturnResult(rr *ReturnResult) asn1tcap.ReturnResult {
+func convertReturnResultToASN1ReturnResult(rr *ReturnResult) (asn1tcap.ReturnResult, error) {
 	result := asn1tcap.ReturnResult{
 		InvokeId: newASN1InvokeIDPresent(rr.InvokeID),
 	}
 
-	if rr.OpCode != nil || rr.Parameter != nil {
-		// Populate the generated result SEQUENCE: opcode + parameter.
-		var resultValue asn1tcap.ReturnResultResult
-		if rr.OpCode != nil {
-			resultValue.Opcode = runtime.RawValue{Bytes: ber.EncodeInteger(*rr.OpCode)}
-		}
-		if rr.Parameter != nil {
-			resultValue.Result = runtime.RawValue{Bytes: rr.Parameter}
-		}
-		result.Result = &resultValue
+	hasOpCode := rr.OpCode != nil
+	hasParameter := len(rr.Parameter) > 0
+	if hasOpCode != hasParameter {
+		// ITU-T Q.773 (06/97) section 3.1 defines ReturnResult.result as
+		// operationCode plus parameter when the optional result is present.
+		return asn1tcap.ReturnResult{}, fmt.Errorf("return result requires opcode and parameter together")
 	}
 
-	return result
+	if hasOpCode {
+		resultResult := asn1tcap.ReturnResultResult{}
+		resultResult.Opcode = runtime.RawValue{Bytes: ber.EncodeInteger(*rr.OpCode)}
+		parameter, err := normalizeParameterTLV(rr.Parameter)
+		if err != nil {
+			return asn1tcap.ReturnResult{}, fmt.Errorf("normalizing result: %w", err)
+		}
+		resultResult.Result = runtime.RawValue{Bytes: parameter}
+		result.Result = &resultResult
+	}
+
+	return result, nil
 }
 
-func convertReturnErrorToASN1ReturnError(re *ReturnError) asn1tcap.ReturnError {
+func convertReturnErrorToASN1ReturnError(re *ReturnError) (asn1tcap.ReturnError, error) {
 	result := asn1tcap.ReturnError{
 		InvokeId: newASN1InvokeIDPresent(re.InvokeID),
 		Errcode:  runtime.RawValue{Bytes: ber.EncodeInteger(re.ErrorCode)},
 	}
 
 	if re.Parameter != nil {
-		param := runtime.RawValue{Bytes: re.Parameter}
+		parameter, err := normalizeParameterTLV(re.Parameter)
+		if err != nil {
+			return asn1tcap.ReturnError{}, fmt.Errorf("normalizing parameter: %w", err)
+		}
+		param := runtime.RawValue{Bytes: parameter}
 		result.Parameter = &param
 	}
 
-	return result
+	return result, nil
 }
 
 func convertRejectToASN1Reject(rj *Reject) asn1tcap.Reject {
@@ -898,45 +912,46 @@ func decodeOpCodeFromRawValue(rv runtime.RawValue) (int64, error) {
 	return val, nil
 }
 
-func convertASN1InvokeIDToInt(id *big.Int) (int, error) {
-	if id == nil || !id.IsInt64() {
-		return 0, newValidationError("invokeID", id, ErrInvalidInvokeID)
-	}
-	value := id.Int64()
-	if value < MinInvokeID || value > MaxInvokeID {
-		return 0, newValidationError("invokeID", value, ErrInvalidInvokeID)
-	}
-	return int(value), nil
-}
-
 func newASN1InvokeIDPresent(invID int) asn1tcap.InvokeId {
 	return asn1tcap.NewInvokeIdPresent(big.NewInt(int64(invID)))
 }
 
-func decodeResultRetRes(data []byte) (int64, []byte, error) {
-	// The result is a SEQUENCE containing opcode + parameter
-	content, _, err := ber.DecodeSequenceContent(data)
-	if err != nil {
-		return 0, nil, fmt.Errorf("decoding result SEQUENCE: %w", err)
+func invokeIDFromASN1(invokeID asn1tcap.InvokeId) (int, bool, error) {
+	if invokeID.Choice != asn1tcap.InvokeIdChoicePresent || invokeID.Present == nil {
+		return 0, false, nil
+	}
+	if !invokeID.Present.IsInt64() {
+		return 0, false, fmt.Errorf("outside int64 range: %s", invokeID.Present.String())
+	}
+	value := invokeID.Present.Int64()
+	if value < int64(MinInvokeID) || value > int64(MaxInvokeID) {
+		// ITU-T Q.773 (06/97) section 3.1 constrains InvokeIdType to -128..127.
+		return 0, false, fmt.Errorf("must be in range %d to %d, got %d", MinInvokeID, MaxInvokeID, value)
+	}
+	return int(value), true, nil
+}
+
+func normalizeParameterTLV(parameter []byte) ([]byte, error) {
+	if len(parameter) == 0 {
+		return nil, nil
 	}
 
 	offset := 0
-
-	// Decode opcode
-	if offset >= len(content) {
-		return 0, nil, fmt.Errorf("missing opcode in result")
+	count := 0
+	for offset < len(parameter) {
+		_, n, _, err := ber.DecodeTLV(parameter[offset:])
+		if err != nil {
+			return nil, fmt.Errorf("at offset %d: %w", offset, err)
+		}
+		offset += n
+		count++
 	}
-	opCode, n, err := ber.DecodeInteger(content[offset:])
-	if err != nil {
-		return 0, nil, fmt.Errorf("decoding opcode: %w", err)
+	if count <= 1 {
+		return parameter, nil
 	}
-	offset += n
-
-	// Remaining bytes are the parameter
-	var param []byte
-	if offset < len(content) {
-		param = content[offset:]
-	}
-
-	return opCode, param, nil
+	// ITU-T Q.773 (06/97) section 3.1 carries operation arguments/results as
+	// one ASN.1 value. ITU-T X.690 (02/21) sections 8.15 and 8.9 require the
+	// complete encoding of that value, so loose field TLVs are wrapped as one
+	// BER SEQUENCE before passing them to the generated open type encoder.
+	return ber.EncodeSequence(parameter), nil
 }

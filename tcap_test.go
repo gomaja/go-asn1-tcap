@@ -3,9 +3,11 @@ package tcap
 import (
 	"bytes"
 	"encoding/hex"
+	"math/big"
 	"testing"
 
 	"github.com/gomaja/go-asn1-tcap/gsmmap"
+	asn1tcap "github.com/gomaja/go-asn1/telecom/ss7/tcap"
 )
 
 // Test data from real TCAP captures (same as go-tcap test suite).
@@ -160,6 +162,30 @@ func TestParse_EmptyData(t *testing.T) {
 	}
 }
 
+func TestParseAbortPAbortCauseRoundtrip(t *testing.T) {
+	input := hexDecode(t, "67064901014a0102")
+	parsed, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	abort, ok := parsed.(*AbortTCAP)
+	if !ok {
+		t.Fatalf("parsed type = %T, want *AbortTCAP", parsed)
+	}
+	if abort.PAbortCause == nil || *abort.PAbortCause != asn1tcap.PAbortCauseBadlyFormattedTransactionPortion {
+		t.Fatalf("PAbortCause = %v, want %v", abort.PAbortCause, asn1tcap.PAbortCauseBadlyFormattedTransactionPortion)
+	}
+
+	marshalled, err := parsed.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if !bytes.Equal(marshalled, input) {
+		t.Fatalf("roundtrip:\n  got  %s\n  want %s", hex.EncodeToString(marshalled), hex.EncodeToString(input))
+	}
+}
+
 func TestNewBegin_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -268,6 +294,73 @@ func TestNewBegin_MarshalRoundtrip(t *testing.T) {
 	if begin.Components[0].Invoke.OpCode != 45 {
 		t.Errorf("expected opcode 45, got %d", begin.Components[0].Invoke.OpCode)
 	}
+
+	wantParameter := hexDecode(t, "3017800891328490507608f38101ff820891328490000005f7")
+	if !bytes.Equal(begin.Components[0].Invoke.Parameter, wantParameter) {
+		t.Fatalf("Invoke parameter = %s, want %s",
+			hex.EncodeToString(begin.Components[0].Invoke.Parameter), hex.EncodeToString(wantParameter))
+	}
+}
+
+func TestInvokeIDBoundariesRoundtrip(t *testing.T) {
+	tests := []struct {
+		name     string
+		invokeID int
+		linkedID int
+	}{
+		{name: "minimum", invokeID: MinInvokeID, linkedID: MaxInvokeID},
+		{name: "maximum", invokeID: MaxInvokeID, linkedID: MinInvokeID},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := &BeginTCAP{
+				Otid: []byte{0x01},
+				Components: []Component{{
+					Invoke: &Invoke{
+						InvokeID: tc.invokeID,
+						LinkedID: intPtr(tc.linkedID),
+						OpCode:   45,
+					},
+				}},
+			}
+
+			marshalled, err := msg.Marshal()
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+
+			parsed, err := Parse(marshalled)
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+
+			begin, ok := parsed.(*BeginTCAP)
+			if !ok {
+				t.Fatalf("parsed type = %T, want *BeginTCAP", parsed)
+			}
+			if len(begin.Components) != 1 || begin.Components[0].Invoke == nil {
+				t.Fatalf("parsed components = %+v, want one invoke", begin.Components)
+			}
+
+			got := begin.Components[0].Invoke
+			if got.InvokeID != tc.invokeID {
+				t.Fatalf("InvokeID = %d, want %d", got.InvokeID, tc.invokeID)
+			}
+			if got.LinkedID == nil || *got.LinkedID != tc.linkedID {
+				t.Fatalf("LinkedID = %v, want %d", got.LinkedID, tc.linkedID)
+			}
+		})
+	}
+}
+
+func TestInvokeIDFromASN1RejectsOutOfRange(t *testing.T) {
+	for _, value := range []int64{int64(MinInvokeID) - 1, int64(MaxInvokeID) + 1} {
+		_, _, err := invokeIDFromASN1(asn1tcap.NewInvokeIdPresent(big.NewInt(value)))
+		if err == nil {
+			t.Fatalf("invokeIDFromASN1(%d) returned nil error", value)
+		}
+	}
 }
 
 func TestNewEnd_MarshalRoundtrip(t *testing.T) {
@@ -290,6 +383,100 @@ func TestNewEnd_MarshalRoundtrip(t *testing.T) {
 
 	if parsed.MessageType() != MessageTypeEnd {
 		t.Errorf("expected End, got %s", parsed.MessageType())
+	}
+}
+
+func TestReturnResultLastWithOpcodeParameterRoundtrip(t *testing.T) {
+	opCode := int64(45)
+	parameter := hexDecode(t, "0403deadbe")
+	msg, err := NewEnd([]byte{0x01}, WithEndReturnResultLast(MaxInvokeID, &opCode, parameter))
+	if err != nil {
+		t.Fatalf("NewEnd: %v", err)
+	}
+
+	marshalled, err := msg.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	want := hexDecode(t, "64144901016c0fa20d02017f300802012d0403deadbe")
+	if !bytes.Equal(marshalled, want) {
+		t.Fatalf("marshalled bytes:\n  got  %s\n  want %s", hex.EncodeToString(marshalled), hex.EncodeToString(want))
+	}
+
+	parsed, err := Parse(marshalled)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	end, ok := parsed.(*EndTCAP)
+	if !ok {
+		t.Fatalf("parsed type = %T, want *EndTCAP", parsed)
+	}
+	if len(end.Components) != 1 || end.Components[0].ReturnResultLast == nil {
+		t.Fatalf("parsed components = %+v, want one return-result-last", end.Components)
+	}
+
+	got := end.Components[0].ReturnResultLast
+	if got.InvokeID != MaxInvokeID {
+		t.Fatalf("InvokeID = %d, want %d", got.InvokeID, MaxInvokeID)
+	}
+	if got.OpCode == nil || *got.OpCode != opCode {
+		t.Fatalf("OpCode = %v, want %d", got.OpCode, opCode)
+	}
+	if !bytes.Equal(got.Parameter, parameter) {
+		t.Fatalf("Parameter = %s, want %s", hex.EncodeToString(got.Parameter), hex.EncodeToString(parameter))
+	}
+}
+
+func TestReturnResultRequiresOpcodeAndParameterTogether(t *testing.T) {
+	opCode := int64(45)
+
+	tests := []struct {
+		name    string
+		opCode  *int64
+		payload []byte
+	}{
+		{name: "opcode only", opCode: &opCode},
+		{name: "parameter only", payload: hexDecode(t, "0403deadbe")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, err := NewEnd([]byte{0x01}, WithEndReturnResultLast(1, tc.opCode, tc.payload))
+			if err != nil {
+				t.Fatalf("NewEnd: %v", err)
+			}
+
+			if _, err := msg.Marshal(); err == nil {
+				t.Fatalf("Marshal returned nil error")
+			}
+		})
+	}
+}
+
+func TestNormalizeParameterTLV(t *testing.T) {
+	single := hexDecode(t, "0403deadbe")
+	got, err := normalizeParameterTLV(single)
+	if err != nil {
+		t.Fatalf("normalize single: %v", err)
+	}
+	if !bytes.Equal(got, single) {
+		t.Fatalf("single TLV = %s, want %s", hex.EncodeToString(got), hex.EncodeToString(single))
+	}
+
+	multiple := hexDecode(t, "8001aa8201bb")
+	want := hexDecode(t, "30068001aa8201bb")
+	got, err = normalizeParameterTLV(multiple)
+	if err != nil {
+		t.Fatalf("normalize multiple: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("multiple TLV = %s, want %s", hex.EncodeToString(got), hex.EncodeToString(want))
+	}
+
+	if _, err := normalizeParameterTLV([]byte{0x04, 0x02, 0xaa}); err == nil {
+		t.Fatalf("normalize truncated TLV returned nil error")
 	}
 }
 
