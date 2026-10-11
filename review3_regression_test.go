@@ -112,7 +112,7 @@ func TestReview3InspectionWithinWorkLimit(t *testing.T) {
 		opts        []tcap.ParseOption
 		otid        string
 	}{
-		{"MaxWork 8", "6380" + "480101" + strings.Repeat("30020500", 100000) + "0000", []tcap.ParseOption{tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: 8})}, "01"},
+		{"MaxWork 8", "6280" + "480101" + strings.Repeat("30020500", 100000) + "0000", []tcap.ParseOption{tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: 8})}, "01"},
 		{"default limits", "6280" + hexOTID + strings.Repeat("0500", 800000) + "0000", nil, "01020304"},
 		{"indefinite children", "6280" + hexOTID + strings.Repeat("30800000", 100000) + "0000", nil, "01020304"},
 	} {
@@ -130,6 +130,20 @@ func TestReview3InspectionWithinWorkLimit(t *testing.T) {
 				t.Fatalf("inspection allocated %d octets", allocated)
 			}
 		})
+	}
+}
+
+// MaxElements counts every element that inspection reads in a message, as
+// it counts every element the codec reads: an ID after the limit is not
+// examined.
+func TestReview3InspectionCountsAllElements(t *testing.T) {
+	child := "3080" + "0500" + "0500" + "0500" + "0000"
+	pe := reviewFailure(t, "6380"+child+child+hexDTID+"0000", tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 4}))
+	if pe.DTID != nil || !errors.Is(pe, ber.ErrResourceLimit) {
+		t.Fatalf("DTID %s after the element limit, %v", pe.DTID, pe.Err)
+	}
+	if pe := reviewFailure(t, "6380"+child+child+hexDTID+"0000"+"00"); pe.DTID.String() != "05060708" {
+		t.Fatalf("within the default limits: DTID %s", pe.DTID)
 	}
 }
 
@@ -172,5 +186,66 @@ func TestReview3ToleratedInvokeID(t *testing.T) {
 	}
 	if pe := reviewFailure(t, input); pe.InvokeID != nil {
 		t.Fatalf("strict: InvokeID %d", *pe.InvokeID)
+	}
+}
+
+// The elements inside a child are delimited as the decoder delimits them, so
+// that a malformed element in a later component leaves an earlier failure
+// located (ITU-T Q.774 (06/97) clause 3.2.2.2): a primitive with an
+// indefinite length (X.690 (02/2021) clause 8.1.3.2) in the second Invoke.
+func TestReview3LaterMalformedElement(t *testing.T) {
+	later := "a180" + "020106" + "02012d" + "0580" + "0000" + "0000"
+	for _, tc := range []struct {
+		name, alone, input string
+		portion            tcap.Portion
+	}{
+		{"component", tlv("62", hexOTID, tlv("6c", hexCodecBadInvoke)), tlv("62", hexOTID, "6c80"+hexCodecBadInvoke+later+"0000"), tcap.PortionComponent},
+		{"dialogue portion", tlv("62", hexOTID, hexDialogueNoEncoding, tlv("6c", hexInvoke)), tlv("62", hexOTID, hexDialogueNoEncoding, "6c80"+hexInvoke+later+"0000"), tcap.PortionDialogue},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			alone, pe := reviewFailure(t, tc.alone), reviewFailure(t, tc.input)
+			if pe.Portion != tc.portion || pe.ComponentIndex != alone.ComponentIndex || pe.Error() != alone.Error() {
+				t.Fatalf("located %s %d: %v; alone %s %d: %v", pe.Portion, pe.ComponentIndex, pe.Err, alone.Portion, alone.ComponentIndex, alone.Err)
+			}
+		})
+	}
+}
+
+// When the message exceeds the decode limits, the transaction ID is taken
+// from where the message type carries it without looking for repetitions,
+// whichever limit ends the decoding.
+func TestReview3IDsAtTheirPositionsBeyondLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		limits      ber.DecodeLimits
+	}{
+		{"MaxElements", "6280" + "480101" + "3080" + "0500" + "0000" + "480102" + "0000", ber.DecodeLimits{MaxElements: 3}},
+		{"MaxDepth", "6280" + "480101" + "3080" + "3080" + "0000" + "0000" + "480102" + "0000", ber.DecodeLimits{MaxDepth: 2}},
+		{"MaxWork", "6206" + "480101" + "480501", ber.DecodeLimits{MaxWork: 3}},
+		{"repetition before the limit", "6280" + "480101" + "480102" + "3080" + "0500" + "0500" + "0000" + "0000", ber.DecodeLimits{MaxElements: 4}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(tc.limits))
+			if pe.OTID.String() != "01" || !errors.Is(pe, ber.ErrResourceLimit) {
+				t.Fatalf("OTID %s, %v", pe.OTID, pe.Err)
+			}
+		})
+	}
+}
+
+// A decode limit that only inspection meets, after the decoder stopped at an
+// earlier malformed element, is reported with the decoder's failure, so that
+// Err tells that the transaction IDs come from their positions.
+func TestReview3InspectionLimitIsReported(t *testing.T) {
+	constructedNull := tlv("a1", "020101", "02012d", "2500")
+	components := "6c80" + constructedNull + "a180" + strings.Repeat("0500", 20) + "0000" + "0000"
+	for _, input := range []string{
+		tlv("62", hexOTID, components),
+		"6280" + hexOTID + components + "0000",
+	} {
+		pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 10}))
+		if pe.Portion != tcap.PortionTransaction || !errors.Is(pe, ber.ErrResourceLimit) || !errors.Is(pe, ber.ErrInvalidTag) || pe.OTID.String() != "01020304" {
+			t.Fatalf("%s: %+v: %v", input[:4], pe, pe.Err)
+		}
 	}
 }

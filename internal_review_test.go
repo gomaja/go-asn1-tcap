@@ -65,14 +65,28 @@ func TestInternalReview3ScanChildren(t *testing.T) {
 	contents := append([]byte{0x48, 0x01, 0x01}, bytes.Repeat([]byte{0x30, 0x02, 0x05, 0x00}, 1000)...)
 	contents = append(contents, 0x00, 0x00, 0x48, 0x01, 0x02)
 	limits := ber.DefaultDecodeLimits()
-	children, err := scanChildren(contents, true, nil, limits)
+	children, err := scanChildren(contents, true, limits)
 	if err != nil || children.count != 1001 || children.idCount != [2]int{1, 0} || len(children.leading) != leadingChildren {
 		t.Fatalf("indefinite: %d children, %d kept, IDs %v, %v", children.count, len(children.leading), children.idCount, err)
 	}
 	limits.MaxWork = 8
-	children, err = scanChildren(contents, true, nil, limits)
+	children, err = scanChildren(contents, true, limits)
 	if !errors.Is(err, ber.ErrResourceLimit) || children.count != 2 {
 		t.Fatalf("MaxWork 8: %d children, %v", children.count, err)
+	}
+	// No element is read once the octets of MaxWork are used.
+	limits.MaxWork = 3
+	children, err = scanChildren([]byte{0x48, 0x01, 0x01, 0x48, 0x05, 0x01}, false, limits)
+	if !errors.Is(err, ber.ErrResourceLimit) || children.count != 1 || children.idCount != [2]int{1, 0} {
+		t.Fatalf("MaxWork 3: %d children, IDs %v, %v", children.count, children.idCount, err)
+	}
+	// MaxElements counts the elements inside the children as well.
+	nested := bytes.Repeat([]byte{0x30, 0x80, 0x05, 0x00, 0x05, 0x00, 0x05, 0x00, 0x00, 0x00}, 3)
+	limits = ber.DefaultDecodeLimits()
+	limits.MaxElements = 6
+	children, err = scanChildren(nested, false, limits)
+	if !errors.Is(err, ber.ErrResourceLimit) || children.count != 1 {
+		t.Fatalf("MaxElements 6: %d children, %v", children.count, err)
 	}
 }
 
@@ -81,8 +95,10 @@ func TestInternalReview3ScanChildren(t *testing.T) {
 // indicator (X.690 (02/2021) clauses 8.1.3 and 8.1.5), within the limits.
 func TestInternalReview3ElementLength(t *testing.T) {
 	limits := ber.DefaultDecodeLimits()
-	shallow := limits
-	shallow.MaxDepth = 2
+	depth3, depth4 := limits, limits
+	depth3.MaxDepth, depth4.MaxDepth = 3, 4
+	work4, work5 := limits, limits
+	work4.MaxWork, work5.MaxWork = 4, 5
 	single := limits
 	single.MaxElements = 1
 	for _, tc := range []struct {
@@ -100,11 +116,15 @@ func TestInternalReview3ElementLength(t *testing.T) {
 		{"indefinite primitive", []byte{0x04, 0x80, 0x00, 0x00}, limits, 0, ber.ErrInvalidLength},
 		{"truncated contents", []byte{0x30, 0x05, 0x05, 0x00}, limits, 0, ber.ErrTruncated},
 		{"no end-of-contents", []byte{0x30, 0x80, 0x05, 0x00}, limits, 0, ber.ErrTruncated},
-		{"depth", []byte{0x30, 0x80, 0x30, 0x80, 0x30, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, shallow, 0, ber.ErrResourceLimit},
+		{"nested primitive indefinite", []byte{0x30, 0x80, 0x05, 0x80, 0x00, 0x00, 0x00, 0x00}, limits, 8, nil},
+		{"depth", []byte{0x30, 0x80, 0x30, 0x80, 0x30, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, depth3, 0, ber.ErrResourceLimit},
+		{"depth with the message", []byte{0x30, 0x80, 0x30, 0x80, 0x30, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, depth4, 12, nil},
+		{"work", []byte{0x04, 0x03, 0x01, 0x02, 0x03}, work4, 0, ber.ErrResourceLimit},
+		{"work within the limit", []byte{0x04, 0x03, 0x01, 0x02, 0x03}, work5, 5, nil},
 		{"elements", []byte{0x30, 0x80, 0x05, 0x00, 0x00, 0x00}, single, 0, ber.ErrResourceLimit},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := elementLength(tc.in, tc.limits)
+			got, err := (&scanBudget{limits: tc.limits}).elementLength(tc.in)
 			if got != tc.want || !errors.Is(err, tc.err) || (tc.err == nil) != (err == nil) {
 				t.Fatalf("elementLength = %d, %v; want %d, %v", got, err, tc.want, tc.err)
 			}

@@ -142,9 +142,11 @@ type ParseError struct {
 	// OTID and DTID are the transaction IDs that could be derived from where
 	// the message type carries them: complete, well-formed, not repeated, and
 	// 1 to 4 octets long (any length with WithConstraintTolerance, empty
-	// included). They are nil otherwise. A message that exceeds the decode
-	// limits is examined only up to them, so a repetition beyond the limits
-	// is not seen.
+	// included). They are nil otherwise. Repetitions are looked for up to an
+	// element that cannot be decoded. When the message exceeds the decode
+	// limits, an ID is taken from where the message type carries it, if that
+	// element lies within the limits, without looking for repetitions; a
+	// message whose type is not recognized then has none.
 	OTID TransactionID
 	DTID TransactionID
 

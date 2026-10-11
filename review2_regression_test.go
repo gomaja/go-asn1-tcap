@@ -80,9 +80,14 @@ func TestReview2IDsBeforeLimits(t *testing.T) {
 	if pe.Portion != tcap.PortionTransaction || pe.OTID.String() != "01020304" {
 		t.Fatalf("deep: %+v, OTID %s", pe, pe.OTID)
 	}
-	pe = reviewFailure(t, tlv("65", hexOTID, hexDTID, tlv("6c", hexInvoke)), tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 2}))
+	// The decoder counts the message as its first element.
+	pe = reviewFailure(t, tlv("65", hexOTID, hexDTID, tlv("6c", hexInvoke)), tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 3}))
 	if !errors.Is(pe, ber.ErrResourceLimit) || pe.OTID.String() != "01020304" || pe.DTID.String() != "05060708" {
 		t.Fatalf("element limit: %+v, IDs %s/%s", pe, pe.OTID, pe.DTID)
+	}
+	pe = reviewFailure(t, tlv("65", hexOTID, hexDTID, tlv("6c", hexInvoke)), tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 2}))
+	if pe.OTID.String() != "01020304" || pe.DTID != nil {
+		t.Fatalf("element limit before the DTID: IDs %s/%s", pe.OTID, pe.DTID)
 	}
 }
 
