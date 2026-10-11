@@ -111,7 +111,7 @@ func onlyVersion1(v *runtime.BitString) bool {
 }
 
 // Q.773 clause 4.2.2.4 permits exactly one parameter element. Its contents
-// belong to the TC-user; Q.773 clause 4.1.1 applies to its outer length only.
+// belong to the TC-user and are encoded as given.
 // The codec appends unchecked RawValue bytes: https://github.com/gomaja/go-asn1/issues/131.
 func validateParameter(data []byte, path string) error {
 	t, n, _, err := ber.DecodeEncodedTLV(data)
@@ -120,5 +120,5 @@ func validateParameter(data []byte, path string) error {
 	if err != nil || n != len(data) || t.Class == tag.ClassUniversal && t.Number == 0 {
 		return fieldError(path, ErrParameterNotSingleValue)
 	}
-	return fieldError(path, checkLength(data))
+	return nil
 }

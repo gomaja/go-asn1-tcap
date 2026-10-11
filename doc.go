@@ -32,14 +32,18 @@
 //
 // # Strictness
 //
-// Marshal applies the sender rules: the ASN.1 constraints of Q.773, the
-// encoding restrictions of Q.773 clause 4.1.1, and the mapping of dialogue
-// PDUs to messages in ITU-T Q.774 (06/97) Table 3. Parse applies the receiver
-// rules: it rejects every encoding that is not a valid TCAP message under
-// Q.773, and every dialogue PDU that cannot appear in the received message
-// type. Rules that depend on transaction or dialogue state (for example that
-// an AARE only appears in the first backward Continue) are left to the TCAP
-// stack built on this package.
+// Marshal applies the sender rules: the ASN.1 constraints of Q.773 and the
+// mapping of dialogue PDUs to messages in ITU-T Q.774 (06/97) Table 3. It
+// encodes in the form that Q.773 clause 4.1.1 requires of a sender:
+// definite lengths, in the short form below 128 octets and otherwise in the
+// fewest octets, and primitive strings. Parameters and other values in the
+// abstract syntax of the TC-user are encoded as given.
+//
+// Parse applies the receiver rules: it accepts any valid BER encoding of a
+// TCAP message and rejects everything else, including every dialogue PDU
+// that cannot appear in the received message type. Rules that depend on
+// transaction or dialogue state (for example that an AARE only appears in the
+// first backward Continue) are left to the TCAP stack built on this package.
 //
 // ASN.1 size and value constraints are reported as *ber.ConstraintError from
 // github.com/gomaja/go-asn1/runtime/ber, use errors.As. Other violations are

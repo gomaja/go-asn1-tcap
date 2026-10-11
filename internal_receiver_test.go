@@ -19,20 +19,6 @@ func internalTLV(tag byte, children ...[]byte) []byte {
 	return append(out, v...)
 }
 
-func internalNonminimal(data []byte) []byte {
-	_, n, _ := ber.DecodeTag(data)
-	length, _, ln, _ := ber.DecodeLength(data[n:])
-	out := append([]byte{}, data[:n]...)
-	if length < 128 {
-		out = append(out, 0x81, byte(length))
-	} else {
-		size := ber.EncodeLength(length)
-		out = append(out, size[0]+1, 0)
-		out = append(out, size[1:]...)
-	}
-	return append(out, data[n+ln:]...)
-}
-
 func internalRawBegin(components ...[]byte) []byte {
 	return internalTLV(0x62, internalTLV(0x48, []byte{1}), internalTLV(0x6c, components...))
 }
@@ -192,7 +178,7 @@ func TestInternalToleranceStaging(t *testing.T) {
 	for _, bad := range [][]byte{
 		append(bytes.Clone(good), 5, 0),
 		internalRawBegin(internalTLV(0xa1, ber.EncodeInteger(128), []byte{0x81, 0}, []byte{2, 1, 1})),
-		internalRawBegin(internalTLV(0xa1, ber.EncodeInteger(128), []byte{2, 1, 1}, []byte{5, 0x81, 0})),
+		internalRawBegin(internalTLV(0xa1, ber.EncodeInteger(128), []byte{2, 1, 1}), internalTLV(0xa1, []byte{5, 0}, []byte{2, 1, 1})),
 	} {
 		if _, err := Parse(bad, WithConstraintTolerance(&log)); err == nil {
 			t.Fatal("bad message accepted")

@@ -20,10 +20,9 @@ type parseConfig struct {
 // WithConstraintTolerance makes Parse accept values outside their ASN.1
 // constraints, such as a transaction ID longer than 4 octets or an invoke ID
 // outside -128..127, and record each violation in log. The violations are
-// recorded only if Parse succeeds. Encoding errors, the encoding restrictions
-// of ITU-T Q.773 (06/97) clause 4.1.1 and the rules for dialogue PDUs still
-// apply, and Marshal stays strict: a message parsed with tolerated violations
-// does not marshal until they are corrected.
+// recorded only if Parse succeeds. Encoding errors and the rules for dialogue
+// PDUs still apply, and Marshal stays strict: a message parsed with tolerated
+// violations does not marshal until they are corrected.
 func WithConstraintTolerance(log *ber.ViolationLog) ParseOption {
 	return toleranceParseOption{log}
 }
@@ -61,7 +60,7 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 	if config.limits != nil {
 		decodeOpts = append(decodeOpts, ber.WithDecodeLimits(*config.limits))
 	}
-	// Stage reports across codec decoding, receiver rules and the Q.773 profile.
+	// Stage reports across codec decoding and the receiver rules.
 	decodeOpts, finish := ber.StageDecodeReports(decodeOpts)
 	defer func() { finish(returnErr == nil) }()
 	var w wire.TCMessage
@@ -80,23 +79,6 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 		}
 		return nil, pe
 	}
-	if failure := checkProfile(data, decodeOpts); failure != nil {
-		pe := inspectFailure(data, decodeOpts)
-		pe.Portion, pe.ComponentIndex, pe.Err = failure.portion, failure.index, failure.err
-		if failure.portion == PortionComponent {
-			pe.InvokeID = inspectComponentID(data, failure.index, decodeOpts)
-			d, c := messagePortions(m)
-			pe.Dialogue = d
-			if failure.index >= 0 {
-				pe.Components = c[:failure.index]
-			} else {
-				pe.Components = nil
-			}
-		} else {
-			pe.InvokeID, pe.Dialogue, pe.Components = nil, nil, nil
-		}
-		return nil, pe
-	}
 	return m, nil
 }
 
@@ -107,19 +89,3 @@ func (o toleranceParseOption) applyParseOption(c *parseConfig) { c.violations = 
 type limitsParseOption struct{ limits ber.DecodeLimits }
 
 func (o limitsParseOption) applyParseOption(c *parseConfig) { c.limits = &o.limits }
-
-func messagePortions(m Message) (*Dialogue, []Component) {
-	switch m := m.(type) {
-	case *Begin:
-		return m.Dialogue, m.Components
-	case *Continue:
-		return m.Dialogue, m.Components
-	case *End:
-		return m.Dialogue, m.Components
-	case *Unidirectional:
-		return m.Dialogue, m.Components
-	case *Abort:
-		return m.Dialogue, nil
-	}
-	return nil, nil
-}

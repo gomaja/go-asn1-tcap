@@ -96,14 +96,6 @@ var (
 	// value that is not exactly one complete BER value, including a missing
 	// result parameter.
 	ErrParameterNotSingleValue = errors.New("tcap: parameter is not one complete BER value")
-
-	// ErrNonMinimalLength reports a length encoded in more octets than
-	// needed, which Q.773 clause 4.1.1 forbids.
-	ErrNonMinimalLength = errors.New("tcap: length not encoded in the minimum number of octets")
-
-	// ErrConstructedString reports an OCTET STRING or a BIT STRING in the
-	// constructed form, which Q.773 clause 4.1.1 forbids.
-	ErrConstructedString = errors.New("tcap: constructed string encoding")
 )
 
 // Portion names the portion of a TCAP message in which Parse failed.
