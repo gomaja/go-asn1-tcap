@@ -46,19 +46,27 @@ jobs:
           fi
 
   build-test:
-    name: build-test / Go ${{ matrix.go }}
+    name: build-test / Go ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.26.x', stable]
+        include:
+          # The minimum is the go directive of go.mod. A version range such
+          # as 1.26.x can resolve to an older cached patch release, which
+          # the directive rejects.
+          - name: minimum
+            go-version-file: go.mod
+          - name: stable
+            go-version: stable
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-go@v7.0.0
         with:
-          go-version: ${{ matrix.go }}
+          go-version: ${{ matrix.go-version }}
+          go-version-file: ${{ matrix.go-version-file }}
           cache: true
       - name: Build
         run: go build ./...
