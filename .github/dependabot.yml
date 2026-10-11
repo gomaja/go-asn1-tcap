@@ -12,6 +12,12 @@ updates:
     commit-message:
       prefix: deps
       include: scope
+    # go-asn1 is consumed from its main branch, which carries no tags; it is
+    # updated with `go get github.com/gomaja/go-asn1@<main commit>`. Its deleted
+    # tags are still served by the module proxy, and Dependabot would propose
+    # them as updates.
+    ignore:
+      - dependency-name: github.com/gomaja/go-asn1
     groups:
       go-modules:
         patterns:
