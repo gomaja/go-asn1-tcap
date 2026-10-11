@@ -51,7 +51,7 @@ type Begin struct {
 
 // Marshal validates and encodes the Begin message.
 func (m *Begin) Marshal() ([]byte, error) {
-	panic("unimplemented")
+	return marshalMessage(m)
 }
 
 func (*Begin) isMessage() {}
@@ -67,7 +67,7 @@ type Continue struct {
 
 // Marshal validates and encodes the Continue message.
 func (m *Continue) Marshal() ([]byte, error) {
-	panic("unimplemented")
+	return marshalMessage(m)
 }
 
 func (*Continue) isMessage() {}
@@ -81,7 +81,7 @@ type End struct {
 
 // Marshal validates and encodes the End message.
 func (m *End) Marshal() ([]byte, error) {
-	panic("unimplemented")
+	return marshalMessage(m)
 }
 
 func (*End) isMessage() {}
@@ -99,7 +99,7 @@ type Abort struct {
 
 // Marshal validates and encodes the Abort message.
 func (m *Abort) Marshal() ([]byte, error) {
-	panic("unimplemented")
+	return marshalMessage(m)
 }
 
 func (*Abort) isMessage() {}
@@ -114,7 +114,7 @@ type Unidirectional struct {
 
 // Marshal validates and encodes the Unidirectional message.
 func (m *Unidirectional) Marshal() ([]byte, error) {
-	panic("unimplemented")
+	return marshalMessage(m)
 }
 
 func (*Unidirectional) isMessage() {}

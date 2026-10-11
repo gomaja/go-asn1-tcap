@@ -89,7 +89,7 @@ type External struct {
 // ProtocolVersion1 returns the protocol-version value {version1}, the only
 // version defined by Q.773 (06/97) clause 3.2.
 func ProtocolVersion1() *runtime.BitString {
-	panic("unimplemented")
+	return &runtime.BitString{Bytes: []byte{0x80}, BitLength: 1}
 }
 
 // OffersVersion1 reports whether the protocol-version of an AARQ or an AUDT
@@ -97,5 +97,5 @@ func ProtocolVersion1() *runtime.BitString {
 // or bit 0 is set. A dialogue request that does not offer version1 is
 // answered as described in ITU-T Q.774 (06/97) clause 3.2.3.
 func OffersVersion1(protocolVersion *runtime.BitString) bool {
-	panic("unimplemented")
+	return protocolVersion == nil || protocolVersion.BitLength >= 1 && len(protocolVersion.Bytes) != 0 && protocolVersion.Bytes[0]&0x80 != 0
 }
