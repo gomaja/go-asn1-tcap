@@ -219,6 +219,24 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 			t.Errorf("transactionIDValue(%s, maxLen %d) ok = %t", tc.in, tc.maxLen, ok)
 		}
 	}
+	// 40000 levels of definite segments, whose charges at every level would
+	// exceed any fixed MaxWork long before the value is read.
+	const levels = 40000
+	sizes := make([]int, levels+1)
+	sizes[levels] = 3
+	for i := levels - 1; i >= 0; i-- {
+		sizes[i] = 1 + len(lengthOctetsForTest(sizes[i+1])) + sizes[i+1]
+	}
+	segments := make([]byte, 0, sizes[0])
+	for i := range levels {
+		segments = append(append(segments, 0x24), lengthOctetsForTest(sizes[i+1])...)
+	}
+	segments = append(segments, 0x04, 0x01, 0x01)
+	segments[0] = 0x68
+	limits := ber.DecodeLimits{MaxDepth: 40001, MaxElements: 40002, MaxWork: len(segments)}
+	if got, ok := transactionIDValue(segments, limits.MaxDepth, 4); !ok || hex.EncodeToString(got) != "01" || !leadingWithinLimits([][]byte{segments}, limits) {
+		t.Fatalf("40000 levels: %x, %t", got, ok)
+	}
 	deep := "0401aa"
 	for range 3 {
 		deep = "2480" + deep + "0000"
@@ -253,4 +271,17 @@ func FuzzTransactionIDValue(f *testing.F) {
 			t.Fatalf("%x: %x, %t; decoder %x, %v", element, got, ok, want, err)
 		}
 	})
+}
+
+// lengthOctetsForTest encodes a definite length in the minimum number of
+// octets (X.690 (02/2021) clause 8.1.3).
+func lengthOctetsForTest(n int) []byte {
+	if n < 0x80 {
+		return []byte{byte(n)}
+	}
+	var octets []byte
+	for ; n > 0; n >>= 8 {
+		octets = append([]byte{byte(n)}, octets...)
+	}
+	return append([]byte{0x80 | byte(len(octets))}, octets...)
 }
