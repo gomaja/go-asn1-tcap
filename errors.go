@@ -141,8 +141,10 @@ type ParseError struct {
 
 	// OTID and DTID are the transaction IDs that could be derived from where
 	// the message type carries them: complete, well-formed, not repeated, and
-	// 1 to 4 octets long (any length with WithConstraintTolerance). They are
-	// nil otherwise.
+	// 1 to 4 octets long (any length with WithConstraintTolerance, empty
+	// included). They are nil otherwise. A message that exceeds the decode
+	// limits is examined only up to them, so a repetition beyond the limits
+	// is not seen.
 	OTID TransactionID
 	DTID TransactionID
 
@@ -160,7 +162,8 @@ type ParseError struct {
 	ComponentType ComponentType
 
 	// InvokeID is the invoke ID of the failing component, when it can be
-	// derived.
+	// derived: its first element is an INTEGER from -128 to 127 (any value
+	// with WithConstraintTolerance).
 	InvokeID *int64
 
 	// Dialogue and Components are set when ComponentIndex is nonnegative:
@@ -170,7 +173,11 @@ type ParseError struct {
 	Dialogue   *Dialogue
 	Components []Component
 
-	// Err is the cause.
+	// Err is the cause. When Portion is the dialogue or component portion,
+	// it is the failure of that dialogue portion or of the component that
+	// ComponentIndex designates, not of anything that follows. When it is
+	// the transaction portion, it is what ended the decoding of the message,
+	// which can lie in any portion.
 	Err error
 }
 

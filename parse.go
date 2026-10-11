@@ -56,14 +56,21 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 		}
 	}
 	var decodeOpts []ber.DecodeOption
-	maxElements := ber.DefaultDecodeLimits().MaxElements
+	limits := ber.DefaultDecodeLimits()
 	if tolerance {
 		decodeOpts = append(decodeOpts, ber.WithConstraintTolerance(config.violations))
 	}
 	if config.limits != nil {
 		decodeOpts = append(decodeOpts, ber.WithDecodeLimits(*config.limits))
+		// The nonzero fields replace the defaults, as in ber.WithDecodeLimits.
+		if config.limits.MaxDepth != 0 {
+			limits.MaxDepth = config.limits.MaxDepth
+		}
 		if config.limits.MaxElements != 0 {
-			maxElements = config.limits.MaxElements
+			limits.MaxElements = config.limits.MaxElements
+		}
+		if config.limits.MaxWork != 0 {
+			limits.MaxWork = config.limits.MaxWork
 		}
 	}
 	// go-asn1 validates decode options when a decoder starts and exports no
@@ -82,16 +89,19 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 	if err := w.UnmarshalBER(data, decodeOpts...); err != nil {
 		// Decode limits are operational failures; Q.774 Table 7 context needs
 		// only transaction IDs and must not decode the portions again.
-		pe := inspectFailure(data, decodeOpts, errors.Is(err, ber.ErrResourceLimit), maxElements)
-		// The failure inspection located, if any, comes first so that Err
-		// describes the element that Portion and ComponentIndex designate.
-		pe.Err = joinErrors(pe.Err, err)
+		pe := inspectFailure(data, decodeOpts, errors.Is(err, ber.ErrResourceLimit), limits)
+		// Err describes the element that Portion and ComponentIndex
+		// designate: a dialogue portion or component that inspection found
+		// failing, whatever the codec met later, or else the message.
+		if pe.Portion == PortionTransaction || pe.Err == nil {
+			pe.Err = joinErrors(pe.Err, err)
+		}
 		return nil, pe
 	}
 	m, pe := decodeMessage(&w, decodeOpts)
 	if pe != nil {
 		if errors.Is(pe.Err, ber.ErrResourceLimit) {
-			failure := inspectFailure(data, decodeOpts, true, maxElements)
+			failure := inspectFailure(data, decodeOpts, true, limits)
 			failure.Err = pe.Err
 			return nil, failure
 		}

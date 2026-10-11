@@ -367,21 +367,18 @@ func TestReviewF10InvalidOptionsBeforeData(t *testing.T) {
 }
 
 func TestReviewF11SingleLineParseErrors(t *testing.T) {
-	for _, tc := range []struct {
-		input string
-		is    error
-	}{
-		{tlv("63", "480101"), tcap.ErrUnrecognizedMessageType},
-		{tlv("62", "480101", "6c05a903020101"), tcap.ErrUnrecognizedComponent},
-	} {
-		pe := reviewFailure(t, tc.input)
-		var causes interface{ Unwrap() []error }
-		if strings.ContainsAny(pe.Error(), "\r\n") || !strings.Contains(pe.Error(), "; ") || !errors.Is(pe, tc.is) || !errors.As(pe, &causes) || len(causes.Unwrap()) != 2 {
-			t.Fatalf("joined error = %q, sentinel match = %t", pe.Error(), errors.Is(pe, tc.is))
-		}
-		if !errors.Is(pe, causes.Unwrap()[0]) || !errors.Is(pe, causes.Unwrap()[1]) {
-			t.Fatal("joined causes are unreachable")
-		}
+	pe := reviewFailure(t, tlv("63", "480101"))
+	var causes interface{ Unwrap() []error }
+	if strings.ContainsAny(pe.Error(), "\r\n") || !strings.Contains(pe.Error(), "; ") || !errors.Is(pe, tcap.ErrUnrecognizedMessageType) || !errors.As(pe, &causes) || len(causes.Unwrap()) != 2 {
+		t.Fatalf("joined error = %q, sentinel match = %t", pe.Error(), errors.Is(pe, tcap.ErrUnrecognizedMessageType))
+	}
+	if !errors.Is(pe, causes.Unwrap()[0]) || !errors.Is(pe, causes.Unwrap()[1]) {
+		t.Fatal("joined causes are unreachable")
+	}
+	// A failing component is the only cause of a component portion failure.
+	pe = reviewFailure(t, tlv("62", "480101", "6c05a903020101"))
+	if strings.ContainsAny(pe.Error(), "\r\n") || pe.Err != tcap.ErrUnrecognizedComponent {
+		t.Fatalf("component error = %q", pe.Error())
 	}
 }
 
