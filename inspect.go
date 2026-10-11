@@ -3,8 +3,6 @@ package tcap
 import (
 	"errors"
 	"fmt"
-	"math"
-	"slices"
 
 	"github.com/gomaja/go-asn1/runtime/ber"
 	"github.com/gomaja/go-asn1/runtime/tag"
@@ -54,7 +52,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	}
 	// Q.773 clause 3.1 and Tables 3-7 establish the transaction portion
 	// before Q.774 clause 3.2.2.2 permits inspection of the other portions.
-	if transactionOnly || pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, opts) {
+	if transactionOnly || pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, limits, opts) {
 		return pe
 	}
 	var dialogue *Dialogue
@@ -267,7 +265,7 @@ func inspectedContents(data []byte) ([]byte, bool) {
 
 // ITU-T Q.773 (06/97) clause 3.1 and Tables 3-7 define immediate child order.
 // Transaction IDs admit the BER string forms of X.690 (02/2021) clause 8.7.
-func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOption) bool {
+func soundTransaction(kept messageChildren, mt MessageType, limits ber.DecodeLimits, opts []ber.DecodeOption) bool {
 	if kept.count > len(kept.leading) {
 		return false
 	}
@@ -286,12 +284,12 @@ func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOpt
 		if pos >= len(children) {
 			return false
 		}
-		t, _, value, err := ber.DecodeTLV(children[pos], opts...)
+		t, err := ber.PeekTag(children[pos])
 		if err != nil || t.Class != tag.ClassApplication || t.Number != number {
 			return false
 		}
-		id, err := ber.DecodeImplicitOctetStringValue(t.Constructed, value, opts...)
-		if err != nil || (len(id) < 1 || len(id) > 4) && !ber.ConstraintToleranceEnabled(opts) {
+		id, ok := transactionIDValue(children[pos], limits.MaxDepth, tidMaxLen(opts))
+		if !ok || len(id) < 1 && !ber.ConstraintToleranceEnabled(opts) {
 			return false
 		}
 		pos++
@@ -331,10 +329,6 @@ func applicationChild(data []byte, number int, opts []ber.DecodeOption) bool {
 // taken without looking for repetitions if the message up to them stays
 // within the limits, and an UNKNOWN message has none.
 func inspectedTIDs(children messageChildren, mt MessageType, limited bool, limits ber.DecodeLimits, opts []ber.DecodeOption) (TransactionID, TransactionID) {
-	// The scan bounded the element already. A segmented ID (X.690 (02/2021)
-	// clause 8.7.3) is decoded again for each level of its segments, which
-	// must not take it beyond MaxWork.
-	opts = append(slices.Clone(opts), ber.WithDecodeLimits(ber.DecodeLimits{MaxWork: math.MaxInt32}))
 	var ids [2]TransactionID
 	for i := range ids {
 		var element []byte
@@ -348,11 +342,11 @@ func inspectedTIDs(children messageChildren, mt MessageType, limited bool, limit
 		if element == nil {
 			continue
 		}
-		t, _, value, err := ber.DecodeTLV(element, opts...)
+		t, err := ber.PeekTag(element)
 		if err != nil || t.Class != tag.ClassApplication || t.Number != 8+i {
 			continue
 		}
-		if id, err := ber.DecodeImplicitOctetStringValue(t.Constructed, value, opts...); err == nil {
+		if id, ok := transactionIDValue(element, limits.MaxDepth, tidMaxLen(opts)); ok {
 			ids[i] = derivableTID(id, ber.ConstraintToleranceEnabled(opts))
 		}
 	}
@@ -435,6 +429,95 @@ func leadingWithinLimits(elements [][]byte, limits ber.DecodeLimits) bool {
 		}
 	}
 	return true
+}
+
+// transactionIDValue returns the value of a transaction ID element, encoded
+// as an OCTET STRING (X.690 (02/2021) clause 8.7): the contents of a
+// primitive element, or the contents of the primitive OCTET STRING segments
+// of a constructed one in order, with segments nested at most maxDepth levels
+// below it as ber.DecodeOctetString allows. It reads each octet once, where
+// the decoder charges the octets of a segment again at every level, and stops
+// at a value longer than maxLen unless maxLen is negative.
+func transactionIDValue(element []byte, maxDepth, maxLen int) ([]byte, bool) {
+	// bound is the end of the innermost definite element around a segment.
+	type frame struct {
+		end, bound int
+		indefinite bool
+	}
+	t, tn, err := ber.DecodeTag(element)
+	if err != nil {
+		return nil, false
+	}
+	length, indefinite, ln, err := ber.DecodeLength(element[tn:])
+	if err != nil {
+		return nil, false
+	}
+	pos := tn + ln
+	if !indefinite && length > len(element)-pos {
+		return nil, false
+	}
+	if !t.Constructed {
+		if indefinite || pos+length != len(element) || maxLen >= 0 && length > maxLen {
+			return nil, false
+		}
+		return element[pos:], true
+	}
+	value := []byte{}
+	open := []frame{{end: pos + length, bound: pos + length, indefinite: indefinite}}
+	if indefinite {
+		open[0].bound = len(element)
+	}
+	for len(open) > 0 {
+		top := open[len(open)-1]
+		if top.indefinite && top.bound-pos >= 2 && element[pos] == 0 && element[pos+1] == 0 {
+			pos += 2
+			open = open[:len(open)-1]
+			continue
+		}
+		if !top.indefinite && pos >= top.end {
+			if pos > top.end {
+				return nil, false
+			}
+			open = open[:len(open)-1]
+			continue
+		}
+		bound := top.bound
+		st, stn, err := ber.DecodeTag(element[pos:bound])
+		if err != nil || st.Class != tag.ClassUniversal || st.Number != tag.TagOctetString || len(open) > maxDepth {
+			return nil, false
+		}
+		slen, sindefinite, sln, err := ber.DecodeLength(element[pos+stn : bound])
+		if err != nil {
+			return nil, false
+		}
+		pos += stn + sln
+		switch {
+		case !sindefinite && slen > bound-pos:
+			return nil, false
+		case st.Constructed && sindefinite:
+			open = append(open, frame{bound: bound, indefinite: true})
+		case st.Constructed:
+			open = append(open, frame{end: pos + slen, bound: pos + slen})
+		case sindefinite || maxLen >= 0 && len(value)+slen > maxLen:
+			return nil, false
+		default:
+			value = append(value, element[pos:pos+slen]...)
+			pos += slen
+		}
+	}
+	if pos != len(element) {
+		return nil, false
+	}
+	return value, true
+}
+
+// tidMaxLen is the longest transaction ID worth decoding: 4 octets (Q.773
+// clause 3.1), or any length with constraint tolerance.
+func tidMaxLen(opts []ber.DecodeOption) int {
+	if ber.ConstraintToleranceEnabled(opts) {
+		return -1
+	}
+	return 4
 }
 
 // firstLimit returns the first of errs that is a decode limit, or nil.

@@ -2,6 +2,7 @@ package tcap
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"math"
 	"reflect"
@@ -166,4 +167,90 @@ func TestInternalReview3LeadingWithinLimits(t *testing.T) {
 			t.Errorf("%s: %t, want %t", tc.name, got, tc.want)
 		}
 	}
+}
+
+// transactionIDValue reads a transaction ID as ber.DecodeOctetString reads
+// an OCTET STRING (X.690 (02/2021) clause 8.7), each octet once.
+func TestInternalReview3TransactionIDValue(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+		ok   bool
+	}{
+		{"primitive", "480401020304", "01020304", true},
+		{"empty", "4800", "", true},
+		{"segments", "68080402010204020304", "01020304", true},
+		{"indefinite segments", "688004020102040203040000", "01020304", true},
+		{"nested segments", "680a24080402010204020304", "01020304", true},
+		{"nested", "680c240a04020102040203040000", "", false},
+		{"nested definite", "680a2408040201020402030400"[:20], "", false},
+		{"nested in indefinite", "6880240804020102040203040000", "01020304", true},
+		{"no segments", "6800", "", true},
+		{"segment not OCTET STRING", "6803020101", "", false},
+		{"end-of-contents across a bound", "6805248004000000", "", false},
+		{"segment past its parent", "6803040201", "", false},
+		{"primitive indefinite segment", "688004800000", "", false},
+		{"trailing octets", "4801010000", "", false},
+		{"no end-of-contents", "6880040101", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in, _ := hex.DecodeString(tc.in)
+			got, ok := transactionIDValue(in, ber.DefaultDecodeLimits().MaxDepth, -1)
+			if ok != tc.ok || ok && hex.EncodeToString(got) != tc.want {
+				t.Fatalf("transactionIDValue(%s) = %x, %t; want %s, %t", tc.in, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		in     string
+		maxLen int
+		ok     bool
+	}{
+		{"480401020304", 4, true},
+		{"48050102030405", 4, false},
+		{"68080402010204020304", 4, true},
+		{"6809040201020403030405", 4, false},
+		{"6809040201020403030405", -1, true},
+		{"48050102030405", -1, true},
+	} {
+		in, _ := hex.DecodeString(tc.in)
+		if _, ok := transactionIDValue(in, ber.DefaultDecodeLimits().MaxDepth, tc.maxLen); ok != tc.ok {
+			t.Errorf("transactionIDValue(%s, maxLen %d) ok = %t", tc.in, tc.maxLen, ok)
+		}
+	}
+	deep := "0401aa"
+	for range 3 {
+		deep = "2480" + deep + "0000"
+	}
+	in, _ := hex.DecodeString("6880" + deep + "0000")
+	if _, ok := transactionIDValue(in, 3, -1); ok {
+		t.Fatal("a segment nested deeper than maxDepth accepted")
+	}
+	if got, ok := transactionIDValue(in, 4, -1); !ok || hex.EncodeToString(got) != "aa" {
+		t.Fatalf("segments within maxDepth: %x, %t", got, ok)
+	}
+}
+
+// FuzzTransactionIDValue: transactionIDValue never panics and agrees with
+// the value ber.DecodeImplicitOctetStringValue decodes from the same element.
+func FuzzTransactionIDValue(f *testing.F) {
+	for _, s := range []string{"480401020304", "680a0402010204020304", "688004020102040203040000", "6880240804020102040203040000", "68062480040000000000"} {
+		in, _ := hex.DecodeString(s)
+		f.Add(in)
+	}
+	f.Fuzz(func(t *testing.T, element []byte) {
+		got, ok := transactionIDValue(element, ber.DefaultDecodeLimits().MaxDepth, -1)
+		tg, n, value, err := ber.DecodeTLV(element)
+		if err != nil || n != len(element) {
+			if ok {
+				t.Fatalf("%x: accepted %x, but DecodeTLV: %d, %v", element, got, n, err)
+			}
+			return
+		}
+		want, err := ber.DecodeImplicitOctetStringValue(tg.Constructed, value, ber.WithDecodeLimits(ber.DecodeLimits{MaxWork: 1 << 24}))
+		if ok != (err == nil) || ok && !bytes.Equal(got, want) {
+			t.Fatalf("%x: %x, %t; decoder %x, %v", element, got, ok, want, err)
+		}
+	})
 }

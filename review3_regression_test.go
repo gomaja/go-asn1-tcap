@@ -299,3 +299,37 @@ func TestReview3NoInvokeIDOfPrimitiveElement(t *testing.T) {
 		}
 	}
 }
+
+// A transaction ID sent in deeply nested segments costs inspection about its
+// size, also where the decoder charges every level again (X.690 (02/2021)
+// clause 8.7.3): strict decoding stops at a value longer than 4 octets.
+func TestReview3SegmentedIDCost(t *testing.T) {
+	id := tlv("04", strings.Repeat("aa", 1<<20))
+	for range 120 {
+		id = tlv("24", id)
+	}
+	input := hx(tlv("62", tlv("68", id), tlv("6c", hexCodecBadInvoke)))
+	for _, tc := range []struct {
+		name    string
+		opts    []tcap.ParseOption
+		idBytes int
+		budget  uint64
+	}{
+		{"strict", nil, 0, 4 << 20},
+		{"tolerant", []tcap.ParseOption{tcap.WithConstraintTolerance(&ber.ViolationLog{})}, 1 << 20, 16 << 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			_, err := tcap.Parse(input, tc.opts...)
+			runtime.ReadMemStats(&after)
+			var pe *tcap.ParseError
+			if !errors.As(err, &pe) || len(pe.OTID) != tc.idBytes {
+				t.Fatalf("Parse = %v, OTID of %d octets", err, len(pe.OTID))
+			}
+			if allocated := after.TotalAlloc - before.TotalAlloc; allocated > tc.budget {
+				t.Fatalf("Parse allocated %d octets", allocated)
+			}
+		})
+	}
+}
