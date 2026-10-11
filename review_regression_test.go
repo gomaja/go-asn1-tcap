@@ -143,9 +143,11 @@ func TestReviewF3ResourceLimitsAndEmptyContext(t *testing.T) {
 		})
 	}
 	t.Run("inspection scan limits", func(t *testing.T) {
+		// The OTID is the first child, within the scanned prefix, so it stays
+		// derivable for the P-Abort of Q.774 (06/97) Table 7.
 		for _, limits := range []ber.DecodeLimits{{MaxWork: 8}, {MaxElements: 2}} {
 			pe := reviewFailure(t, "62074801014f004e00", tcap.WithDecodeLimits(limits))
-			if !errors.Is(pe, ber.ErrResourceLimit) || pe.Portion != tcap.PortionTransaction || pe.ComponentIndex != -1 || pe.OTID != nil || pe.DTID != nil || pe.Dialogue != nil || pe.Components != nil || pe.InvokeID != nil {
+			if !errors.Is(pe, ber.ErrResourceLimit) || pe.Portion != tcap.PortionTransaction || pe.ComponentIndex != -1 || pe.OTID.String() != "01" || pe.DTID != nil || pe.Dialogue != nil || pe.Components != nil || pe.InvokeID != nil {
 				t.Fatalf("limited immediate scan = %+v, IDs = %s/%s", pe, pe.OTID, pe.DTID)
 			}
 		}

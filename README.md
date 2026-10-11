@@ -172,9 +172,10 @@ values of TCAP protocol elements.)
 ### Errors and abnormal procedures
 
 `Marshal` applies the sender rules: the ASN.1 of Q.773 and the dialogue PDUs
-that each message type may carry (Q.774 Table 3). It encodes everything it
-builds in the form that Q.773 clause 4.1.1 requires of a sender: definite
-lengths in the fewest octets, and primitive strings. `Parse` applies the
+that each message type may carry (Q.774 Table 3). What it encodes itself uses
+definite lengths, in the short form below 128 octets and otherwise in the
+fewest octets as Q.773 clause 4.1.1 requires of definite lengths, and
+primitive strings. Parameters are sent as given. `Parse` applies the
 receiver rules: it accepts any valid BER encoding of a TCAP message and
 rejects everything else, including a dialogue PDU that the message type
 cannot carry. Rules that depend on the transaction or dialogue state are left

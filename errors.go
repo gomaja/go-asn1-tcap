@@ -139,8 +139,10 @@ type ParseError struct {
 	// not recognized or its tag cannot be decoded.
 	MessageType MessageType
 
-	// OTID and DTID are the transaction IDs that could be derived: complete,
-	// well-formed and 1 to 4 octets long. They are nil otherwise.
+	// OTID and DTID are the transaction IDs that could be derived from where
+	// the message type carries them: complete, well-formed, not repeated, and
+	// 1 to 4 octets long (any length with WithConstraintTolerance). They are
+	// nil otherwise.
 	OTID TransactionID
 	DTID TransactionID
 
@@ -182,7 +184,7 @@ func (e *ParseError) Error() string {
 	if e.ComponentIndex >= 0 {
 		component = fmt.Sprintf(" component %d", e.ComponentIndex)
 	}
-	return fmt.Sprintf("tcap: parse %s: %s portion%s: %v", name, e.Portion, component, e.Err)
+	return fmt.Sprintf("tcap: parse %s: %s portion%s: %s", name, e.Portion, component, causeText(e.Err))
 }
 
 // Unwrap returns the cause.
@@ -199,7 +201,16 @@ type FieldError struct {
 
 // Error describes the failure.
 func (e *FieldError) Error() string {
-	return fmt.Sprintf("tcap: %s: %v", e.Path, e.Err)
+	return fmt.Sprintf("tcap: %s: %s", e.Path, causeText(e.Err))
+}
+
+// causeText returns the message of a wrapped error without the package
+// prefix that the enclosing message already carries.
+func causeText(err error) string {
+	if err == nil {
+		return "<nil>"
+	}
+	return strings.TrimPrefix(err.Error(), "tcap: ")
 }
 
 // Unwrap returns the cause.

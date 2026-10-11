@@ -22,14 +22,19 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	if pe.MessageType == "" {
 		pe.Err = ErrUnrecognizedMessageType
 	}
+	// Q.773 Table 8: a message is constructed; a primitive has no children.
+	if !t.Constructed {
+		return pe
+	}
 	_, n, value, err := ber.DecodeTLV(data, opts...)
 	if err != nil {
+		// Q.774 Table 7: the leading IDs may still be derivable when a later
+		// part of the message cannot be decoded.
+		children, _ := inspectedChildren(inspectedContents(data), opts, maxElements)
+		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, opts)
 		return pe
 	}
 	children, err := inspectedChildren(value, opts, maxElements)
-	if errors.Is(err, ber.ErrResourceLimit) {
-		return pe
-	}
 	pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, opts)
 	if err != nil {
 		return pe
@@ -45,17 +50,23 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		switch t.Number {
 		case 11:
 			var w wire.DialoguePortion
-			err := w.UnmarshalBER(data, opts...)
-			if err == nil {
-				dialogue, err = decodeDialogue(&w, pe.MessageType, opts)
+			if err := w.UnmarshalBER(data, opts...); err != nil {
+				if !errors.Is(err, ber.ErrResourceLimit) {
+					pe.Portion = PortionDialogue
+				}
+				return pe
 			}
+			d, err := decodeDialogue(&w, pe.MessageType, opts)
 			if errors.Is(err, ber.ErrResourceLimit) {
 				return pe
 			}
 			if err != nil {
-				pe.Portion = PortionDialogue
+				// The codec does not decode the dialogue PDU, so this is the
+				// failure the dialogue portion reports.
+				pe.Portion, pe.Err = PortionDialogue, joinErrors(pe.Err, err)
 				return pe
 			}
+			dialogue = d
 		case 12:
 			var prefix []Component
 			index := 0
@@ -77,7 +88,11 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 					var w wire.Component
 					err = w.UnmarshalBER(value[:n], opts...)
 					if err == nil {
-						c, err = decodeComponent(w, fmt.Sprintf("Components[%d]", index), opts)
+						// A receiver rule rejects a component the codec decoded;
+						// report that failure, not a later one of the codec.
+						if c, err = decodeComponent(w, fmt.Sprintf("Components[%d]", index), opts); err != nil {
+							pe.Err = joinErrors(pe.Err, err)
+						}
 					}
 				}
 				if errors.Is(err, ber.ErrResourceLimit) {
@@ -111,7 +126,7 @@ func inspectedChildren(data []byte, opts []ber.DecodeOption, maxElements int) ([
 	var children [][]byte
 	for len(data) > 0 {
 		if len(children) >= maxElements {
-			return nil, ber.ErrResourceLimit
+			return children, ber.ErrResourceLimit
 		}
 		_, n, _, err := ber.DecodeTLV(data, opts...)
 		if err != nil {
@@ -122,6 +137,24 @@ func inspectedChildren(data []byte, opts []ber.DecodeOption, maxElements int) ([
 		data = data[n:]
 	}
 	return children, nil
+}
+
+// inspectedContents returns the contents of a constructed element whose
+// complete TLV cannot be decoded, as far as its header allows.
+func inspectedContents(data []byte) []byte {
+	_, tn, err := ber.DecodeTag(data)
+	if err != nil {
+		return nil
+	}
+	length, indefinite, ln, err := ber.DecodeLength(data[tn:])
+	if err != nil {
+		return nil
+	}
+	contents := data[tn+ln:]
+	if !indefinite && length < len(contents) {
+		contents = contents[:length]
+	}
+	return contents
 }
 
 // ITU-T Q.773 (06/97) clause 3.1 and Tables 3-7 define immediate child order.
@@ -206,7 +239,7 @@ func inspectedTIDs(children [][]byte, mt MessageType, opts []ber.DecodeOption) (
 			continue
 		}
 		if id, err := ber.DecodeImplicitOctetStringValue(t.Constructed, value, opts...); err == nil {
-			ids[i] = derivableTID(id)
+			ids[i] = derivableTID(id, ber.ConstraintToleranceEnabled(opts))
 		}
 	}
 	return ids[0], ids[1]

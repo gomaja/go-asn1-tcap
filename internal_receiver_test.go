@@ -231,7 +231,7 @@ func TestInternalInspection(t *testing.T) {
 	if _, err := Parse(internalRawBegin(prefix), WithDecodeLimits(ber.DecodeLimits{})); err != nil {
 		t.Fatal(err)
 	}
-	if got := (&ParseError{MessageType: MessageTypeBegin, Portion: PortionComponent, ComponentIndex: 2, Err: ErrMissingInvokeID}).Error(); got != "tcap: parse Begin: component portion component 2: tcap: missing invoke ID" {
+	if got := (&ParseError{MessageType: MessageTypeBegin, Portion: PortionComponent, ComponentIndex: 2, Err: ErrMissingInvokeID}).Error(); got != "tcap: parse Begin: component portion component 2: missing invoke ID" {
 		t.Fatal(got)
 	}
 }

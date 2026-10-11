@@ -33,11 +33,12 @@
 // # Strictness
 //
 // Marshal applies the sender rules: the ASN.1 constraints of Q.773 and the
-// mapping of dialogue PDUs to messages in ITU-T Q.774 (06/97) Table 3. It
-// encodes in the form that Q.773 clause 4.1.1 requires of a sender:
-// definite lengths, in the short form below 128 octets and otherwise in the
-// fewest octets, and primitive strings. Parameters and other values in the
-// abstract syntax of the TC-user are encoded as given.
+// mapping of dialogue PDUs to messages in ITU-T Q.774 (06/97) Table 3. What
+// it encodes itself uses definite lengths, which Q.773 clause 4.1.1 requires
+// in the short form below 128 octets and otherwise in the fewest octets, and
+// primitive strings; clause 4.1.2.3 would also allow indefinite lengths.
+// Parameters and other values in the abstract syntax of the TC-user are
+// encoded as given.
 //
 // Parse applies the receiver rules: it accepts any valid BER encoding of a
 // TCAP message and rejects everything else, including every dialogue PDU

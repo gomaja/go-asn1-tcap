@@ -34,7 +34,8 @@ func decodeMessage(w *wire.TCMessage, opts []ber.DecodeOption) (Message, *ParseE
 	default:
 		return nil, &ParseError{Portion: PortionTransaction, ComponentIndex: -1, Err: ErrUnrecognizedMessageType}
 	}
-	pe := &ParseError{MessageType: mt, OTID: derivableTID(otid), DTID: derivableTID(dtid), ComponentIndex: -1}
+	tolerant := ber.ConstraintToleranceEnabled(opts)
+	pe := &ParseError{MessageType: mt, OTID: derivableTID(otid, tolerant), DTID: derivableTID(dtid, tolerant), ComponentIndex: -1}
 	d, err := decodeDialogue(dp, mt, opts)
 	if err != nil {
 		pe.Portion, pe.Err = PortionDialogue, err
@@ -42,6 +43,9 @@ func decodeMessage(w *wire.TCMessage, opts []ber.DecodeOption) (Message, *ParseE
 	}
 	c, index, err := decodeComponents(cp, opts)
 	if err != nil {
+		if len(c) == 0 {
+			c = nil
+		}
 		pe.Portion, pe.ComponentIndex, pe.Dialogue, pe.Components, pe.Err = PortionComponent, index, d, c, err
 		return nil, pe
 	}
@@ -61,8 +65,9 @@ func decodeMessage(w *wire.TCMessage, opts []ber.DecodeOption) (Message, *ParseE
 }
 
 // Q.774 Table 7: only complete IDs satisfying the transaction syntax are derivable.
-func derivableTID(v []byte) TransactionID {
-	if len(v) < 1 || len(v) > 4 {
+// With constraint tolerance, an ID of any length that Parse accepts is derivable.
+func derivableTID(v []byte, tolerant bool) TransactionID {
+	if len(v) == 0 || len(v) > 4 && !tolerant {
 		return nil
 	}
 	return slices.Clone(v)

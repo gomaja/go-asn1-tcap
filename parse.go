@@ -83,10 +83,9 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 		// Decode limits are operational failures; Q.774 Table 7 context needs
 		// only transaction IDs and must not decode the portions again.
 		pe := inspectFailure(data, decodeOpts, errors.Is(err, ber.ErrResourceLimit), maxElements)
-		if errors.Is(pe.Err, ErrUnrecognizedMessageType) || errors.Is(pe.Err, ErrUnrecognizedComponent) {
-			err = joinErrors(err, pe.Err)
-		}
-		pe.Err = err
+		// The failure inspection located, if any, comes first so that Err
+		// describes the element that Portion and ComponentIndex designate.
+		pe.Err = joinErrors(pe.Err, err)
 		return nil, pe
 	}
 	m, pe := decodeMessage(&w, decodeOpts)
