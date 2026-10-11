@@ -171,25 +171,34 @@ values of TCAP protocol elements.)
 
 ### Errors and abnormal procedures
 
-`Marshal` applies the sender rules and `Parse` the receiver rules: the ASN.1
-of Q.773, its encoding restrictions (clause 4.1.1: minimal lengths,
-primitive strings), and the dialogue PDUs that each message type may carry
-(Q.774 Table 3). Rules that depend on the transaction or dialogue state are
-left to the stack built on this package.
+`Marshal` applies the sender rules: the ASN.1 of Q.773 and the dialogue PDUs
+that each message type may carry (Q.774 Table 3). It encodes everything it
+builds in the form that Q.773 clause 4.1.1 requires of a sender: definite
+lengths in the fewest octets, and primitive strings. `Parse` applies the
+receiver rules: it accepts any valid BER encoding of a TCAP message and
+rejects everything else, including a dialogue PDU that the message type
+cannot carry. Rules that depend on the transaction or dialogue state are left
+to the stack built on this package.
 
 - ASN.1 size and value constraints, such as a transaction ID of 5 octets or an
   invoke ID of 200, are `*ber.ConstraintError` (`errors.As`).
 - Every other rule has an `Err` sentinel (`errors.Is`), for example
   `tcap.ErrUnexpectedDialoguePDU` or `tcap.ErrParameterNotSingleValue`.
 - `Marshal` reports the offending field in a `*tcap.FieldError`.
-- Every `Parse` error is a `*tcap.ParseError` that tells a TCAP stack how to
-  react, as required by Q.774: the message type, the transaction IDs that
-  could be derived, and the portion that failed. A failure in the transaction
-  portion calls for a P-Abort (clause 3.3.4); one in the dialogue portion for
-  an ABRT from the dialogue service provider (clause 3.2.2.1); one in the
-  component portion for a Reject (clause 3.2.2.2), for which the error gives
+- Every `Parse` error caused by the data is a `*tcap.ParseError` that tells a
+  TCAP stack how to react, as required by Q.774: the message type, the
+  transaction IDs that could be derived from where the message type carries
+  them, and the portion that failed. A failure in the transaction portion
+  calls for an Abort with a P-Abort cause to the originating transaction ID,
+  when it can be derived (clause 3.3.4, Table 7: an End or an Abort is only
+  discarded). One in the dialogue portion calls for an ABRT from the dialogue
+  service provider (clause 3.2.2.1). One in the component portion calls for a
+  Reject (clause 3.2.2.2, Table 5): the error gives the position and type of
   the failing component, its invoke ID when it can be derived, the dialogue,
-  and the valid components that precede it.
+  and the valid components that precede it. A malformed Reject is discarded,
+  not rejected.
+- An invalid `ParseOption` returns an error wrapping
+  `tcap.ErrInvalidParseOption`, not a `*tcap.ParseError`.
 
 ```go
 msg, err := tcap.Parse(data)
@@ -198,12 +207,13 @@ if errors.As(err, &perr) {
     switch perr.Portion {
     case tcap.PortionTransaction:
         if perr.OTID != nil {
-            // send an Abort with a P-Abort cause to perr.OTID
+            // answer with an Abort whose DTID is perr.OTID and a P-Abort cause
         }
     case tcap.PortionDialogue:
-        // send an Abort with tcap.NewProviderAbortDialogue()
+        // answer with an Abort carrying tcap.NewProviderAbortDialogue()
     case tcap.PortionComponent:
-        // process perr.Components, then reject the component at perr.ComponentIndex
+        // process perr.Components; then, unless perr.ComponentType is
+        // tcap.ComponentTypeReject, reject the component at perr.ComponentIndex
     }
 }
 ```
@@ -270,8 +280,8 @@ traffic that does not conform. `Marshal` stays strict.
 - `ErrInvalidTransactionID` and `ErrInvalidInvokeID` are reported as
   `*ber.ConstraintError`; `ValidationError` is `FieldError`; `ParseError`
   carries the protocol context described above.
-- `Parse` no longer falls back to a relaxed decoder, and rejects encodings
-  that Q.773 forbids.
+- `Parse` no longer falls back to a relaxed decoder: it accepts every valid
+  BER encoding of a TCAP message and rejects everything else.
 - `Marshal` uses definite lengths: a message received with indefinite lengths
   is re-encoded with definite lengths.
 - `MinTransactionIDLength`, `MaxTransactionIDLength`, `MinInvokeID`,
