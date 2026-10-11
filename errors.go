@@ -144,9 +144,12 @@ type ParseError struct {
 	// 1 to 4 octets long (any length with WithConstraintTolerance, empty
 	// included). They are nil otherwise. Repetitions are looked for up to an
 	// element that cannot be decoded. When the message exceeds the decode
-	// limits, an ID is taken from where the message type carries it, if that
-	// element lies within the limits, without looking for repetitions; a
-	// message whose type is not recognized then has none.
+	// limits, an ID is taken from where the message type carries it, without
+	// looking for repetitions, if the message up to the end of that element
+	// stays within the limits: MaxElements counting the message and every
+	// element in it, MaxDepth the levels of nesting from the message, and
+	// MaxWork the octets of its elements. A message whose type is not
+	// recognized then has no IDs.
 	OTID TransactionID
 	DTID TransactionID
 
@@ -179,7 +182,8 @@ type ParseError struct {
 	// it is the failure of that dialogue portion or of the component that
 	// ComponentIndex designates, not of anything that follows. When it is
 	// the transaction portion, it is what ended the decoding of the message,
-	// which can lie in any portion.
+	// which can lie in any portion, after ErrUnrecognizedMessageType and a
+	// decode limit met only while inspecting the message, if any.
 	Err error
 }
 

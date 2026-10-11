@@ -131,3 +131,39 @@ func TestInternalReview3ElementLength(t *testing.T) {
 		})
 	}
 }
+
+// leadingWithinLimits counts the leading elements of a message as the
+// decoder counts them: the message and every element inside them against
+// MaxElements, the levels from the message against MaxDepth, and their
+// octets against MaxWork.
+func TestInternalReview3LeadingWithinLimits(t *testing.T) {
+	primitive := []byte{0x48, 0x01, 0x01}
+	segmented := []byte{0x68, 0x03, 0x04, 0x01, 0x01}
+	indefinite := []byte{0x68, 0x80, 0x04, 0x01, 0x01, 0x00, 0x00}
+	limits := func(depth, elements, work int) ber.DecodeLimits {
+		return ber.DecodeLimits{MaxDepth: depth, MaxElements: elements, MaxWork: work}
+	}
+	for _, tc := range []struct {
+		name     string
+		elements [][]byte
+		limits   ber.DecodeLimits
+		want     bool
+	}{
+		{"primitive", [][]byte{primitive}, limits(1, 2, 3), true},
+		{"primitive elements", [][]byte{primitive}, limits(1, 1, 3), false},
+		{"primitive work", [][]byte{primitive}, limits(1, 2, 2), false},
+		{"segmented", [][]byte{segmented}, limits(2, 3, 5), true},
+		{"segmented depth", [][]byte{segmented}, limits(1, 3, 5), false},
+		{"segmented elements", [][]byte{segmented}, limits(2, 2, 5), false},
+		{"indefinite", [][]byte{indefinite}, limits(2, 3, 7), true},
+		{"two elements", [][]byte{segmented, primitive}, limits(2, 4, 8), true},
+		{"two elements beyond", [][]byte{segmented, primitive}, limits(2, 3, 8), false},
+		{"truncated", [][]byte{{0x68, 0x05, 0x04, 0x01, 0x01}}, limits(2, 9, 9), false},
+		{"segment past its parent", [][]byte{{0x68, 0x02, 0x04, 0x01, 0x01}}, limits(2, 9, 9), false},
+		{"no end-of-contents", [][]byte{{0x68, 0x80, 0x04, 0x01, 0x01}}, limits(2, 9, 9), false},
+	} {
+		if got := leadingWithinLimits(tc.elements, tc.limits); got != tc.want {
+			t.Errorf("%s: %t, want %t", tc.name, got, tc.want)
+		}
+	}
+}

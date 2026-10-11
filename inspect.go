@@ -35,7 +35,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		contents, indefinite := inspectedContents(data)
 		children, scanErr := scanChildren(contents, indefinite, limits)
 		limit := firstLimit(err, scanErr)
-		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, transactionOnly || limit != nil, opts)
+		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, transactionOnly || limit != nil, limits, opts)
 		if !transactionOnly && limit != nil {
 			pe.Err = joinErrors(pe.Err, limit)
 		}
@@ -43,7 +43,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	}
 	children, err := scanChildren(value, false, limits)
 	limit := firstLimit(err)
-	pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, transactionOnly || limit != nil, opts)
+	pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, transactionOnly || limit != nil, limits, opts)
 	if !transactionOnly && limit != nil {
 		pe.Err = joinErrors(pe.Err, limit)
 	}
@@ -85,9 +85,12 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 					return pe
 				}
 				if err != nil {
+					// The first element of a component that cannot be
+					// delimited may still be a complete invoke ID.
 					ct, _ = ber.PeekTag(value)
+					contents, _ := inspectedContents(value)
 					pe.Portion, pe.ComponentIndex, pe.ComponentType, pe.Err = PortionComponent, index, inspectedComponentType(ct), err
-					pe.Dialogue, pe.Components = dialogue, prefix
+					pe.InvokeID, pe.Dialogue, pe.Components = derivableInvokeID(contents, opts), dialogue, prefix
 					return pe
 				}
 				var c Component
@@ -317,13 +320,14 @@ func applicationChild(data []byte, number int, opts []ber.DecodeOption) bool {
 // Q.774 Table 7 derives IDs only at Q.773 clause 3.1 positions; UNKNOWN
 // messages admit unique first-level IDs. Duplicates are not derivable. When
 // the message exceeds the decode limits, the IDs at their positions are
-// taken without looking for repetitions, and an UNKNOWN message has none.
-func inspectedTIDs(children messageChildren, mt MessageType, limited bool, opts []ber.DecodeOption) (TransactionID, TransactionID) {
+// taken without looking for repetitions if the message up to them stays
+// within the limits, and an UNKNOWN message has none.
+func inspectedTIDs(children messageChildren, mt MessageType, limited bool, limits ber.DecodeLimits, opts []ber.DecodeOption) (TransactionID, TransactionID) {
 	var ids [2]TransactionID
 	for i := range ids {
 		var element []byte
 		if limited {
-			if pos := tidPosition(mt, i); pos >= 0 && pos < len(children.leading) {
+			if pos := tidPosition(mt, i); pos >= 0 && pos < len(children.leading) && leadingWithinLimits(children.leading[:pos+1], limits) {
 				element = children.leading[pos]
 			}
 		} else if children.idCount[i] == 1 && (mt == "" || tidPosition(mt, i) == children.idPos[i]) {
@@ -356,6 +360,69 @@ func tidPosition(mt MessageType, i int) int {
 		return 0
 	}
 	return -1
+}
+
+// leadingWithinLimits reports whether the leading elements of a message stay
+// within limits as the decoder counts them: MaxElements the message and
+// every element in them, MaxDepth the levels of nesting from the message,
+// and MaxWork their octets.
+func leadingWithinLimits(elements [][]byte, limits ber.DecodeLimits) bool {
+	type frame struct {
+		end        int
+		indefinite bool
+	}
+	count, work := 1, 0
+	for _, e := range elements {
+		if work += len(e); work > limits.MaxWork {
+			return false
+		}
+		var open []frame
+		pos := 0
+		for {
+			if n := len(open); n > 0 {
+				top := open[n-1]
+				if top.indefinite && len(e)-pos >= 2 && e[pos] == 0 && e[pos+1] == 0 {
+					pos += 2
+					open = open[:n-1]
+					continue
+				}
+				if !top.indefinite && pos == top.end {
+					open = open[:n-1]
+					continue
+				}
+			} else if pos > 0 {
+				break
+			}
+			if count++; count > limits.MaxElements {
+				return false
+			}
+			t, tn, err := ber.DecodeTag(e[pos:])
+			if err != nil {
+				return false
+			}
+			length, indefinite, ln, err := ber.DecodeLength(e[pos+tn:])
+			if err != nil {
+				return false
+			}
+			pos += tn + ln
+			switch {
+			case t.Constructed && 2+len(open) > limits.MaxDepth:
+				return false
+			case t.Constructed && indefinite:
+				open = append(open, frame{indefinite: true})
+			case indefinite || length > len(e)-pos || len(open) > 0 && !open[len(open)-1].indefinite && pos+length > open[len(open)-1].end:
+				return false
+			case t.Constructed:
+				open = append(open, frame{end: pos + length})
+			default:
+				pos += length
+			}
+		}
+		if pos != len(e) {
+			return false
+		}
+	}
+	return true
 }
 
 // firstLimit returns the first of errs that is a decode limit, or nil.

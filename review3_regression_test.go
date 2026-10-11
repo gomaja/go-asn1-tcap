@@ -249,3 +249,40 @@ func TestReview3InspectionLimitIsReported(t *testing.T) {
 		}
 	}
 }
+
+// Beyond the decode limits, the elements of a transaction ID sent in
+// segments (X.690 (02/2021) clause 8.7.3) count against the limits as the
+// decoder counts them, wherever their length is definite.
+func TestReview3SegmentedIDsWithinLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, otid, dtid string
+		limits                  ber.DecodeLimits
+	}{
+		{"depth", "65086803040101490102", "", "", ber.DecodeLimits{MaxDepth: 1}},
+		{"elements", "65086803040101490102", "01", "", ber.DecodeLimits{MaxElements: 3}},
+		{"elements after two segments", "6517680804020102040203044904050607086c05a103020105", "01020304", "", ber.DecodeLimits{MaxElements: 4}},
+		{"nested segments", "6519680a240824060404010203044904050607086c05a103020105", "", "", ber.DecodeLimits{MaxDepth: 3}},
+		{"within the limits", "6519680a240824060404010203044904050607086c05a103020105", "01020304", "05060708", ber.DecodeLimits{MaxDepth: 4, MaxElements: 7}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(tc.limits))
+			if pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid || (pe.OTID == nil) != (tc.otid == "") || (pe.DTID == nil) != (tc.dtid == "") {
+				t.Fatalf("IDs %s/%s, want %s/%s: %v", pe.OTID, pe.DTID, tc.otid, tc.dtid, pe.Err)
+			}
+		})
+	}
+}
+
+// A component that cannot be delimited still reports its invoke ID when its
+// first element is a complete INTEGER (ITU-T Q.774 (06/97) Table 5).
+func TestReview3InvokeIDOfUndelimitedComponent(t *testing.T) {
+	for _, input := range []string{
+		"620e4801016c09a18002010504ff0000",
+		"620a4801016c05a180020105",
+	} {
+		pe := reviewFailure(t, input)
+		if pe.ComponentIndex != 0 || pe.ComponentType != tcap.ComponentTypeInvoke || pe.InvokeID == nil || *pe.InvokeID != 5 {
+			t.Fatalf("%s: %+v", input, pe)
+		}
+	}
+}
