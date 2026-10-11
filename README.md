@@ -49,8 +49,15 @@ means for a consumer:
   the module that requires it.
 - A project that requires v1.0.x is warned that it is retracted. `go get -u`
   leaves it there, because the main branch's pseudo-versions sort below
-  v1.0.x; it moves to the main branch with the command above. The v1.0.x API
-  differs (see [Migrating from v1.0.x](#migrating-from-v10x)).
+  v1.0.x. v1.0.x also required go-asn1 v0.3.0, which sorts above the main
+  branch of go-asn1 in the same way and does not build with this package, so
+  move both modules to their main branches together:
+
+  ```bash
+  go get github.com/gomaja/go-asn1-tcap@main github.com/gomaja/go-asn1@main
+  ```
+
+  The v1.0.x API differs (see [Migrating from v1.0.x](#migrating-from-v10x)).
 
 ## Usage
 
