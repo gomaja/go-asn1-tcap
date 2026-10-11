@@ -2,6 +2,7 @@ package tcap
 
 import (
 	"errors"
+	"fmt"
 )
 
 // Errors reported by Marshal and Parse. ASN.1 size and value constraints are
@@ -156,7 +157,15 @@ type ParseError struct {
 
 // Error describes the failure.
 func (e *ParseError) Error() string {
-	panic("unimplemented")
+	name := string(e.MessageType)
+	if name == "" {
+		name = "message"
+	}
+	component := ""
+	if e.ComponentIndex >= 0 {
+		component = fmt.Sprintf(" component %d", e.ComponentIndex)
+	}
+	return fmt.Sprintf("tcap: parse %s: %s portion%s: %v", name, e.Portion, component, e.Err)
 }
 
 // Unwrap returns the cause.
@@ -173,7 +182,7 @@ type FieldError struct {
 
 // Error describes the failure.
 func (e *FieldError) Error() string {
-	panic("unimplemented")
+	return fmt.Sprintf("tcap: %s: %v", e.Path, e.Err)
 }
 
 // Unwrap returns the cause.
