@@ -3,6 +3,7 @@ package tcap
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Errors reported by Marshal and Parse. ASN.1 size and value constraints are
@@ -10,6 +11,10 @@ import (
 var (
 	// ErrEmptyData reports that Parse received no octets.
 	ErrEmptyData = errors.New("tcap: empty data")
+
+	// ErrInvalidParseOption reports a nil ParseOption, WithConstraintTolerance(nil) or
+	// decode limits that go-asn1 does not accept.
+	ErrInvalidParseOption = errors.New("tcap: invalid parse option")
 
 	// ErrNilMessage reports a Marshal call on a nil message.
 	ErrNilMessage = errors.New("tcap: nil message")
@@ -108,11 +113,23 @@ const (
 	PortionComponent   Portion = "component"
 )
 
+// ComponentType names the failing component type ITU-T Q.773 Table 19.
+type ComponentType string
+
+const (
+	ComponentTypeInvoke              ComponentType = "Invoke"
+	ComponentTypeReturnResultLast    ComponentType = "ReturnResultLast"
+	ComponentTypeReturnResultNotLast ComponentType = "ReturnResultNotLast"
+	ComponentTypeReturnError         ComponentType = "ReturnError"
+	ComponentTypeReject              ComponentType = "Reject"
+)
+
 // ParseError reports why Parse failed, with what a TCAP stack needs to apply
 // the abnormal procedures of ITU-T Q.774 (06/97): a P-Abort for a failure in
 // the transaction portion (clause 3.3.4, Table 7), an ABRT from the dialogue
 // service provider for one in the dialogue portion (clause 3.2.2.1), and a
-// Reject for one in the component portion (clause 3.2.2.2, Table 5).
+// Reject for one in the component portion (clause 3.2.2.2, Table 5), except
+// a malformed Reject, which is discarded and reported only to the local user.
 //
 // None of its fields alias the parsed data.
 type ParseError struct {
@@ -132,11 +149,17 @@ type ParseError struct {
 	// component portion, or -1.
 	ComponentIndex int
 
+	// ComponentType is the type of the failing component, or "" when its tag
+	// is not a component type or ComponentIndex is -1. A malformed Reject
+	// is discarded and reported locally; it is never answered with a Reject
+	// (ITU-T Q.774 (06/97) clause 3.2.2.2 and Table 5).
+	ComponentType ComponentType
+
 	// InvokeID is the invoke ID of the failing component, when it can be
 	// derived.
 	InvokeID *int64
 
-	// Dialogue and Components are set when Portion is PortionComponent:
+	// Dialogue and Components are set when ComponentIndex is nonnegative:
 	// the decoded dialogue portion, and the valid components that precede
 	// the failing one. Components that follow it are discarded (Q.774 clause
 	// 3.2.2.2).
@@ -180,4 +203,32 @@ func (e *FieldError) Error() string {
 // Unwrap returns the cause.
 func (e *FieldError) Unwrap() error {
 	return e.Err
+}
+
+type joinedError struct{ causes []error }
+
+func (e *joinedError) Error() string {
+	messages := make([]string, len(e.causes))
+	for i, err := range e.causes {
+		messages[i] = err.Error()
+	}
+	return strings.Join(messages, "; ")
+}
+
+func (e *joinedError) Unwrap() []error { return e.causes }
+
+func joinErrors(errs ...error) error {
+	var causes []error
+	for _, err := range errs {
+		if err != nil {
+			causes = append(causes, err)
+		}
+	}
+	if len(causes) == 0 {
+		return nil
+	}
+	if len(causes) == 1 {
+		return causes[0]
+	}
+	return &joinedError{causes: causes}
 }

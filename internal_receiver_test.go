@@ -238,8 +238,8 @@ func TestInternalInspection(t *testing.T) {
 
 func TestInternalUnknownMessageAndComponent(t *testing.T) {
 	_, err := Parse(internalHex(t, "660a4801016c05a503020103"))
-	if !errors.Is(err, ErrUnrecognizedMessageType) || !errors.Is(err, ErrUnrecognizedComponent) {
-		t.Fatalf("both unrecognized tags must remain reachable: %v", err)
+	if !errors.Is(err, ErrUnrecognizedMessageType) || errors.Is(err, ErrUnrecognizedComponent) {
+		t.Fatalf("unknown message must fail in the transaction portion: %v", err)
 	}
 }
 

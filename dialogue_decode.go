@@ -6,6 +6,7 @@ import (
 
 	"github.com/gomaja/go-asn1/runtime"
 	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/runtime/tag"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
 )
 
@@ -28,6 +29,15 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeO
 	data, err := externalData(e)
 	if err != nil {
 		return nil, err
+	}
+	// Q.773 clause 3.2 defines only AARQ [0], AARE [1] and ABRT [4]
+	// under dialogue-as-id, and only AUDT [0] under uniDialogue-as-id.
+	t, err := ber.PeekTag(data)
+	if err != nil {
+		return nil, err
+	}
+	if t.Class != tag.ClassApplication || !t.Constructed || t.Number != 0 && (uni || t.Number != 1 && t.Number != 4) {
+		return nil, ErrUnexpectedDialoguePDU
 	}
 	var d Dialogue
 	if uni {

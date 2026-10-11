@@ -29,7 +29,14 @@ func cloneBigInt(v *big.Int) *big.Int {
 // keep them: https://github.com/gomaja/go-asn1/issues/138.
 func cloneBits(v runtime.BitString) runtime.BitString {
 	v.Bytes = slices.Clone(v.Bytes)
-	if n := (v.BitLength + 7) / 8; v.BitLength >= 0 && n <= len(v.Bytes) {
+	if v.BitLength < 0 {
+		return v
+	}
+	n := v.BitLength / 8
+	if v.BitLength%8 != 0 {
+		n++
+	}
+	if n <= len(v.Bytes) {
 		v.Bytes = v.Bytes[:n]
 		if r := v.BitLength % 8; r != 0 {
 			v.Bytes[n-1] &= 0xff << (8 - r)

@@ -507,7 +507,7 @@ func TestMarshalDoesNotAliasOrMutate(t *testing.T) {
 				{ReturnError: &tcap.ReturnError{InvokeID: 2, ErrorCode: tcap.LocalCode(7), Parameter: hx("0401ff")}},
 			}},
 			&tcap.Abort{DTID: tcap.TransactionID{9}, Dialogue: abrtUserD([]tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalArbitrary, Arbitrary: runtime.BitString{Bytes: hx("a0"), BitLength: 3}}})},
-			&tcap.Unidirectional{Components: []tcap.Component{{Invoke: &tcap.Invoke{InvokeID: 5, LinkedID: ptr[int64](4), OpCode: tcap.LocalCode(1), Parameter: hx("300100")}}}},
+			&tcap.Unidirectional{Components: []tcap.Component{{Invoke: &tcap.Invoke{InvokeID: 5, LinkedID: ptr[int64](4), OpCode: tcap.LocalCode(1), Parameter: hx("3003020100")}}}},
 			// Failing messages must not be changed either.
 			&tcap.Begin{OTID: tcap.TransactionID{1, 2, 3, 4}, Components: []tcap.Component{invokeC(1), {Invoke: &tcap.Invoke{InvokeID: 2, OpCode: tcap.LocalCode(1), Parameter: hx("0401aa00")}}}},
 			&tcap.Continue{OTID: tcap.TransactionID{1}, DTID: tcap.TransactionID{2}, Dialogue: aareD(pv("c0", 2), true)},

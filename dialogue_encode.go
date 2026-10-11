@@ -14,6 +14,17 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 		return nil, nil
 	}
 	if d.Opaque != nil {
+		// Q.773 clause 4.2.3 and Q.774 Table 3 require the sender rules
+		// of the structured alternatives for these abstract syntaxes.
+		if d.Opaque.DirectReference != "" {
+			arcs, err := encodeOID(d.Opaque.DirectReference, "Dialogue.Opaque.DirectReference")
+			if err != nil {
+				return nil, err
+			}
+			if slices.Equal(arcs, wire.DialogueAsId()) || slices.Equal(arcs, wire.UniDialogueAsId()) {
+				return nil, fieldError("Dialogue.Opaque.DirectReference", ErrUnexpectedDialoguePDU)
+			}
+		}
 		e, err := encodeExternal(*d.Opaque, "Dialogue.Opaque")
 		if err != nil {
 			return nil, err
