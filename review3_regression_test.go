@@ -263,6 +263,8 @@ func TestReview3SegmentedIDsWithinLimits(t *testing.T) {
 		{"elements after two segments", "6517680804020102040203044904050607086c05a103020105", "01020304", "", ber.DecodeLimits{MaxElements: 4}},
 		{"nested segments", "6519680a240824060404010203044904050607086c05a103020105", "", "", ber.DecodeLimits{MaxDepth: 3}},
 		{"within the limits", "6519680a240824060404010203044904050607086c05a103020105", "01020304", "05060708", ber.DecodeLimits{MaxDepth: 4, MaxElements: 7}},
+		{"work of the segments", "620768030401010500", "01", "", ber.DecodeLimits{MaxWork: 5}},
+		{"work of indefinite segments", "6209688004010100000500", "01", "", ber.DecodeLimits{MaxWork: 7}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(tc.limits))
@@ -283,6 +285,17 @@ func TestReview3InvokeIDOfUndelimitedComponent(t *testing.T) {
 		pe := reviewFailure(t, input)
 		if pe.ComponentIndex != 0 || pe.ComponentType != tcap.ComponentTypeInvoke || pe.InvokeID == nil || *pe.InvokeID != 5 {
 			t.Fatalf("%s: %+v", input, pe)
+		}
+	}
+}
+
+// A primitive element in the component portion has contents, not elements,
+// so it has no invoke ID (Q.773 (06/97) Table 19 components are constructed).
+func TestReview3NoInvokeIDOfPrimitiveElement(t *testing.T) {
+	for _, element := range []string{"8180020105", "8103020105", "8503020105"} {
+		pe := reviewFailure(t, tlv("62", hexOTID, tlv("6c", hexInvoke, element)))
+		if pe.ComponentIndex != 1 || pe.InvokeID != nil {
+			t.Fatalf("%s: index %d, InvokeID %v", element, pe.ComponentIndex, pe.InvokeID)
 		}
 	}
 }

@@ -3,6 +3,8 @@ package tcap
 import (
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 
 	"github.com/gomaja/go-asn1/runtime/ber"
 	"github.com/gomaja/go-asn1/runtime/tag"
@@ -88,9 +90,12 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 					// The first element of a component that cannot be
 					// delimited may still be a complete invoke ID.
 					ct, _ = ber.PeekTag(value)
-					contents, _ := inspectedContents(value)
 					pe.Portion, pe.ComponentIndex, pe.ComponentType, pe.Err = PortionComponent, index, inspectedComponentType(ct), err
-					pe.InvokeID, pe.Dialogue, pe.Components = derivableInvokeID(contents, opts), dialogue, prefix
+					if ct.Constructed {
+						contents, _ := inspectedContents(value)
+						pe.InvokeID = derivableInvokeID(contents, opts)
+					}
+					pe.Dialogue, pe.Components = dialogue, prefix
 					return pe
 				}
 				var c Component
@@ -108,7 +113,10 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 				}
 				if err != nil {
 					pe.Portion, pe.ComponentIndex, pe.ComponentType, pe.Err = PortionComponent, index, inspectedComponentType(ct), err
-					pe.InvokeID, pe.Dialogue, pe.Components = derivableInvokeID(content, opts), dialogue, prefix
+					if ct.Constructed {
+						pe.InvokeID = derivableInvokeID(content, opts)
+					}
+					pe.Dialogue, pe.Components = dialogue, prefix
 					return pe
 				}
 				prefix = append(prefix, c)
@@ -323,6 +331,10 @@ func applicationChild(data []byte, number int, opts []ber.DecodeOption) bool {
 // taken without looking for repetitions if the message up to them stays
 // within the limits, and an UNKNOWN message has none.
 func inspectedTIDs(children messageChildren, mt MessageType, limited bool, limits ber.DecodeLimits, opts []ber.DecodeOption) (TransactionID, TransactionID) {
+	// The scan bounded the element already. A segmented ID (X.690 (02/2021)
+	// clause 8.7.3) is decoded again for each level of its segments, which
+	// must not take it beyond MaxWork.
+	opts = append(slices.Clone(opts), ber.WithDecodeLimits(ber.DecodeLimits{MaxWork: math.MaxInt32}))
 	var ids [2]TransactionID
 	for i := range ids {
 		var element []byte
@@ -479,7 +491,8 @@ func inspectedComponentType(t tag.Tag) ComponentType {
 	return ""
 }
 
-// Q.773 clause 4.2.2.2 and Q.774 Table 5: derive only a valid first INTEGER.
+// Q.773 clause 4.2.2.2 and Q.774 Table 5: derive only a valid first INTEGER
+// of a constructed component (Q.773 Table 19); content is its contents.
 // With constraint tolerance, a value outside -128..127 that Parse accepts is
 // derivable as well.
 func derivableInvokeID(content []byte, opts []ber.DecodeOption) *int64 {
