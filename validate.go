@@ -119,5 +119,11 @@ func validateParameter(data []byte, path string) error {
 	if err != nil || n != len(data) || t.Class == tag.ClassUniversal && t.Number == 0 {
 		return fieldError(path, ErrParameterNotSingleValue)
 	}
+	// X.690 (02/2021) clauses 8.1 and 8.2 require valid BER structure,
+	// including the contents of constructed values and universal tag forms.
+	limits := ber.DecodeLimits{MaxDepth: len(data), MaxElements: len(data), MaxWork: len(data)}
+	if err := ber.ValidateBERElement(data, ber.WithDecodeLimits(limits)); err != nil {
+		return fieldError(path, joinErrors(ErrParameterNotSingleValue, err))
+	}
 	return nil
 }

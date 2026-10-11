@@ -13,7 +13,9 @@ import (
 // Request, Response and Abort are the structured dialogue PDUs, carried under
 // dialogue-as-id; Unidirectional is the unstructured dialogue PDU, carried
 // under uniDialogue-as-id. Opaque is a dialogue portion in any other abstract
-// syntax: user information that the TC-user defines.
+// syntax: user information that the TC-user defines. Marshal rejects Opaque
+// with dialogue-as-id or uniDialogue-as-id; use the corresponding PDU field
+// so that the sender rules apply (Q.773 clause 4.2.3).
 //
 // The dialogue PDUs a message may carry are those of ITU-T Q.774 (06/97)
 // Table 3: AARQ in a Begin; AARE with result accepted in a Continue or an End;
