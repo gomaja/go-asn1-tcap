@@ -611,3 +611,39 @@ func mutateMessage(msg tcap.Message) {
 		ext([]tcap.External{*d.Opaque})
 	}
 }
+
+// TestParseClearsUnusedBits covers BIT STRING values whose unused bits are
+// set. ITU-T X.690 (02/2021) clause 8.6.2.2: the unused bits are not part of
+// the value, so the parsed value has them cleared and marshals in the
+// canonical form.
+func TestParseClearsUnusedBits(t *testing.T) {
+	// Continue with an AARE whose protocol-version is '1'B sent as 07 81.
+	aare := "6538480405060708490401020304" + "6b2a2828060700118605010101a01d611b80020781a109060704000001001403a203020100a305a103020100"
+	m := mustParse(t, aare)
+	r := m.(*tcap.Continue).Dialogue.Response
+	if got := r.ProtocolVersion; got == nil || got.BitLength != 1 || !bytes.Equal(got.Bytes, []byte{0x80}) {
+		t.Fatalf("protocol-version %+v, want 80/1", got)
+	}
+	out, err := m.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if want := "6538480405060708490401020304" + "6b2a2828060700118605010101a01d611b80020780a109060704000001001403a203020100a305a103020100"; hex.EncodeToString(out) != want {
+		t.Fatalf("Marshal %x, want %s", out, want)
+	}
+
+	// Begin with an opaque dialogue portion: EXTERNAL arbitrary [2] with four
+	// unused bits, one of them set (found by FuzzParse).
+	m = mustParse(t, "62134804303030306b0b2809060330303082020431")
+	o := m.(*tcap.Begin).Dialogue.Opaque
+	if o.Encoding != runtime.ExternalArbitrary || o.Arbitrary.BitLength != 4 || !bytes.Equal(o.Arbitrary.Bytes, []byte{0x30}) {
+		t.Fatalf("arbitrary %+v, want 30/4", o.Arbitrary)
+	}
+	out, err = m.Marshal()
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if want := "62134804303030306b0b2809060330303082020430"; hex.EncodeToString(out) != want {
+		t.Fatalf("Marshal %x, want %s", out, want)
+	}
+}

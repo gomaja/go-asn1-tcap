@@ -23,8 +23,18 @@ func cloneBigInt(v *big.Int) *big.Int {
 	return new(big.Int).Set(v)
 }
 
+// cloneBits copies a BIT STRING value and clears the bits after BitLength.
+// They are not part of the value (ITU-T X.690 (02/2021) clause 8.6.2.2), a
+// BER sender may set them, and go-asn1 refuses to encode some values that
+// keep them: https://github.com/gomaja/go-asn1/issues/138.
 func cloneBits(v runtime.BitString) runtime.BitString {
 	v.Bytes = slices.Clone(v.Bytes)
+	if n := (v.BitLength + 7) / 8; v.BitLength >= 0 && n <= len(v.Bytes) {
+		v.Bytes = v.Bytes[:n]
+		if r := v.BitLength % 8; r != 0 {
+			v.Bytes[n-1] &= 0xff << (8 - r)
+		}
+	}
 	return v
 }
 

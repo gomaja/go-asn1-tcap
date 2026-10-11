@@ -92,6 +92,8 @@ func validateDialogue(d *Dialogue, mt MessageType, sender bool) error {
 	return nil
 }
 
+// onlyVersion1 reports whether protocol-version is {version1}: bit 0 set and
+// no other bit of the value set.
 func onlyVersion1(v *runtime.BitString) bool {
 	if v == nil {
 		return true
@@ -99,11 +101,8 @@ func onlyVersion1(v *runtime.BitString) bool {
 	if !OffersVersion1(v) {
 		return false
 	}
-	for i, b := range v.Bytes {
-		if i == 0 {
-			b &= 0x7f
-		}
-		if b != 0 {
+	for i := 1; i < v.BitLength && i/8 < len(v.Bytes); i++ {
+		if v.Bytes[i/8]&(0x80>>(i%8)) != 0 {
 			return false
 		}
 	}

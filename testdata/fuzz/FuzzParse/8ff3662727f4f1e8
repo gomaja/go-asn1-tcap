@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("b\x13H\x040000k\v(\t\x06\x03000\x82\x02\x041")
