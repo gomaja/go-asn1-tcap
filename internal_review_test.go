@@ -196,7 +196,7 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in, _ := hex.DecodeString(tc.in)
-			got, ok := transactionIDValue(in, ber.DefaultDecodeLimits().MaxDepth, -1)
+			got, ok := transactionIDValue(in, ber.DefaultDecodeLimits(), -1)
 			if ok != tc.ok || ok && hex.EncodeToString(got) != tc.want {
 				t.Fatalf("transactionIDValue(%s) = %x, %t; want %s, %t", tc.in, got, ok, tc.want, tc.ok)
 			}
@@ -215,7 +215,7 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 		{"48050102030405", -1, true},
 	} {
 		in, _ := hex.DecodeString(tc.in)
-		if _, ok := transactionIDValue(in, ber.DefaultDecodeLimits().MaxDepth, tc.maxLen); ok != tc.ok {
+		if _, ok := transactionIDValue(in, ber.DefaultDecodeLimits(), tc.maxLen); ok != tc.ok {
 			t.Errorf("transactionIDValue(%s, maxLen %d) ok = %t", tc.in, tc.maxLen, ok)
 		}
 	}
@@ -234,7 +234,7 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 	segments = append(segments, 0x04, 0x01, 0x01)
 	segments[0] = 0x68
 	limits := ber.DecodeLimits{MaxDepth: 40001, MaxElements: 40002, MaxWork: len(segments)}
-	if got, ok := transactionIDValue(segments, limits.MaxDepth, 4); !ok || hex.EncodeToString(got) != "01" || !leadingWithinLimits([][]byte{segments}, limits) {
+	if got, ok := transactionIDValue(segments, limits, 4); !ok || hex.EncodeToString(got) != "01" || !leadingWithinLimits([][]byte{segments}, limits) {
 		t.Fatalf("40000 levels: %x, %t", got, ok)
 	}
 	deep := "0401aa"
@@ -242,11 +242,26 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 		deep = "2480" + deep + "0000"
 	}
 	in, _ := hex.DecodeString("6880" + deep + "0000")
-	if _, ok := transactionIDValue(in, 3, -1); ok {
-		t.Fatal("a segment nested deeper than maxDepth accepted")
+	depth := func(d int) ber.DecodeLimits {
+		limits := ber.DefaultDecodeLimits()
+		limits.MaxDepth = d
+		return limits
 	}
-	if got, ok := transactionIDValue(in, 4, -1); !ok || hex.EncodeToString(got) != "aa" {
-		t.Fatalf("segments within maxDepth: %x, %t", got, ok)
+	if _, ok := transactionIDValue(in, depth(3), -1); ok {
+		t.Fatal("a segment nested deeper than MaxDepth accepted")
+	}
+	if got, ok := transactionIDValue(in, depth(4), -1); !ok || hex.EncodeToString(got) != "aa" {
+		t.Fatalf("segments within MaxDepth: %x, %t", got, ok)
+	}
+	// The element and its 4 segments are 5 elements.
+	elements := ber.DefaultDecodeLimits()
+	elements.MaxElements = 4
+	if _, ok := transactionIDValue(in, elements, -1); ok {
+		t.Fatal("more segments than MaxElements accepted")
+	}
+	elements.MaxElements = 5
+	if _, ok := transactionIDValue(in, elements, -1); !ok {
+		t.Fatal("segments within MaxElements rejected")
 	}
 }
 
@@ -258,7 +273,7 @@ func FuzzTransactionIDValue(f *testing.F) {
 		f.Add(in)
 	}
 	f.Fuzz(func(t *testing.T, element []byte) {
-		got, ok := transactionIDValue(element, ber.DefaultDecodeLimits().MaxDepth, -1)
+		got, ok := transactionIDValue(element, ber.DefaultDecodeLimits(), -1)
 		tg, n, value, err := ber.DecodeTLV(element)
 		if err != nil || n != len(element) {
 			if ok {

@@ -333,3 +333,17 @@ func TestReview3SegmentedIDCost(t *testing.T) {
 		})
 	}
 }
+
+// The segments of a transaction ID count against MaxElements as the decoder
+// counts them, also when the decoder stopped before the ID for another
+// reason (here a constructed NULL, X.690 (02/2021) clause 8.8.1).
+func TestReview3SegmentsCountAgainstMaxElements(t *testing.T) {
+	otid := tlv("68", strings.Repeat("0400", 19), "040401020304")
+	input := tlv("63", "2500", otid)
+	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 10})); pe.OTID != nil {
+		t.Fatalf("OTID %s from 21 elements under MaxElements 10", pe.OTID)
+	}
+	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 30})); pe.OTID.String() != "01020304" {
+		t.Fatalf("OTID %s under MaxElements 30", pe.OTID)
+	}
+}

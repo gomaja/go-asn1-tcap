@@ -288,7 +288,7 @@ func soundTransaction(kept messageChildren, mt MessageType, limits ber.DecodeLim
 		if err != nil || t.Class != tag.ClassApplication || t.Number != number {
 			return false
 		}
-		id, ok := transactionIDValue(children[pos], limits.MaxDepth, tidMaxLen(opts))
+		id, ok := transactionIDValue(children[pos], limits, tidMaxLen(opts))
 		if !ok || len(id) < 1 && !ber.ConstraintToleranceEnabled(opts) {
 			return false
 		}
@@ -346,7 +346,7 @@ func inspectedTIDs(children messageChildren, mt MessageType, limited bool, limit
 		if err != nil || t.Class != tag.ClassApplication || t.Number != 8+i {
 			continue
 		}
-		if id, ok := transactionIDValue(element, limits.MaxDepth, tidMaxLen(opts)); ok {
+		if id, ok := transactionIDValue(element, limits, tidMaxLen(opts)); ok {
 			ids[i] = derivableTID(id, ber.ConstraintToleranceEnabled(opts))
 		}
 	}
@@ -434,11 +434,12 @@ func leadingWithinLimits(elements [][]byte, limits ber.DecodeLimits) bool {
 // transactionIDValue returns the value of a transaction ID element, encoded
 // as an OCTET STRING (X.690 (02/2021) clause 8.7): the contents of a
 // primitive element, or the contents of the primitive OCTET STRING segments
-// of a constructed one in order, with segments nested at most maxDepth levels
-// below it as ber.DecodeOctetString allows. It reads each octet once, where
-// the decoder charges the octets of a segment again at every level, and stops
-// at a value longer than maxLen unless maxLen is negative.
-func transactionIDValue(element []byte, maxDepth, maxLen int) ([]byte, bool) {
+// of a constructed one in order. As ber.DecodeOctetString allows, segments
+// nest at most MaxDepth levels below the element, and the element and its
+// segments number at most MaxElements. It reads each octet once, where the
+// decoder charges the octets of a segment again at every level, and stops at
+// a value longer than maxLen unless maxLen is negative.
+func transactionIDValue(element []byte, limits ber.DecodeLimits, maxLen int) ([]byte, bool) {
 	// bound is the end of the innermost definite element around a segment.
 	type frame struct {
 		end, bound int
@@ -462,7 +463,7 @@ func transactionIDValue(element []byte, maxDepth, maxLen int) ([]byte, bool) {
 		}
 		return element[pos:], true
 	}
-	value := []byte{}
+	value, elements := []byte{}, 1
 	open := []frame{{end: pos + length, bound: pos + length, indefinite: indefinite}}
 	if indefinite {
 		open[0].bound = len(element)
@@ -483,7 +484,7 @@ func transactionIDValue(element []byte, maxDepth, maxLen int) ([]byte, bool) {
 		}
 		bound := top.bound
 		st, stn, err := ber.DecodeTag(element[pos:bound])
-		if err != nil || st.Class != tag.ClassUniversal || st.Number != tag.TagOctetString || len(open) > maxDepth {
+		if elements++; err != nil || st.Class != tag.ClassUniversal || st.Number != tag.TagOctetString || len(open) > limits.MaxDepth || elements > limits.MaxElements {
 			return nil, false
 		}
 		slen, sindefinite, sln, err := ber.DecodeLength(element[pos+stn : bound])
