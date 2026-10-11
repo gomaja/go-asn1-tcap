@@ -2,58 +2,181 @@ package tcap
 
 import (
 	"errors"
-	"fmt"
 )
 
-// Sentinel errors for TCAP operations.
+// Errors reported by Marshal and Parse. ASN.1 size and value constraints are
+// reported as *ber.ConstraintError instead.
 var (
-	// ErrEmptyData indicates empty or nil data.
-	ErrEmptyData = errors.New("empty data provided")
+	// ErrEmptyData reports that Parse received no octets.
+	ErrEmptyData = errors.New("tcap: empty data")
 
-	// ErrInvalidTransactionID indicates invalid transaction ID.
-	ErrInvalidTransactionID = errors.New("invalid transaction ID")
+	// ErrNilMessage reports a Marshal call on a nil message.
+	ErrNilMessage = errors.New("tcap: nil message")
 
-	// ErrInvalidInvokeID indicates invalid invoke ID.
-	ErrInvalidInvokeID = errors.New("invalid invoke ID")
+	// ErrInvalidOID reports an object identifier that is not valid or not in
+	// canonical dotted-decimal form.
+	ErrInvalidOID = errors.New("tcap: invalid object identifier")
+
+	// ErrUnrepresentableValue reports a valid value that does not fit its Go
+	// type, such as a local code outside the int64 range.
+	ErrUnrepresentableValue = errors.New("tcap: value cannot be represented")
+
+	// ErrUnrecognizedMessageType reports a message tag that is not a TCAP
+	// message type (ITU-T Q.773 (06/97) Table 8).
+	ErrUnrecognizedMessageType = errors.New("tcap: unrecognized message type")
+
+	// ErrUnrecognizedComponent reports a component tag that is not a TCAP
+	// component type (Q.773 Table 19).
+	ErrUnrecognizedComponent = errors.New("tcap: unrecognized component type")
+
+	// ErrComponentNoAlternative and ErrComponentMultipleAlternatives report a
+	// Component with no field or more than one field set.
+	ErrComponentNoAlternative        = errors.New("tcap: component has no alternative")
+	ErrComponentMultipleAlternatives = errors.New("tcap: component has multiple alternatives")
+
+	// ErrCodeNoAlternative reports a missing operation or error code.
+	ErrCodeNoAlternative = errors.New("tcap: code has no alternative")
+
+	// ErrProblemNoAlternative and ErrProblemMultipleAlternatives report a
+	// Problem with no field or more than one field set.
+	ErrProblemNoAlternative        = errors.New("tcap: problem has no alternative")
+	ErrProblemMultipleAlternatives = errors.New("tcap: problem has multiple alternatives")
+
+	// ErrResultSourceDiagnosticNoAlternative and
+	// ErrResultSourceDiagnosticMultipleAlternatives report a
+	// ResultSourceDiagnostic with no field or more than one field set.
+	ErrResultSourceDiagnosticNoAlternative        = errors.New("tcap: result-source-diagnostic has no alternative")
+	ErrResultSourceDiagnosticMultipleAlternatives = errors.New("tcap: result-source-diagnostic has multiple alternatives")
+
+	// ErrDialogueNoAlternative and ErrDialogueMultipleAlternatives report a
+	// Dialogue with no field or more than one field set.
+	ErrDialogueNoAlternative        = errors.New("tcap: dialogue has no alternative")
+	ErrDialogueMultipleAlternatives = errors.New("tcap: dialogue has multiple alternatives")
+
+	// ErrUnexpectedDialoguePDU reports a dialogue PDU that the message type
+	// cannot carry (ITU-T Q.774 (06/97) Table 3), or a dialogue PDU that does
+	// not belong to the abstract syntax named by the dialogue portion (Q.773
+	// clause 4.2.3).
+	ErrUnexpectedDialoguePDU = errors.New("tcap: unexpected dialogue PDU")
+
+	// ErrUnexpectedDialogueResult reports an AARE whose result does not suit
+	// the message: a Continue or an End carries an AARE that accepts the
+	// dialogue, an Abort one that rejects it (Q.774 Table 3).
+	ErrUnexpectedDialogueResult = errors.New("tcap: unexpected dialogue result")
+
+	// ErrUnexpectedUserInformation reports user information in an ABRT whose
+	// abort source is the dialogue service provider (Q.774 clause 3.2.2.1).
+	ErrUnexpectedUserInformation = errors.New("tcap: unexpected user information")
+
+	// ErrUnsupportedProtocolVersion reports a protocol-version that does not
+	// offer version1 in an AARQ or an AUDT to be marshalled, or that is not
+	// exactly version1 in an AARE (Q.774 clause 3.2.3).
+	ErrUnsupportedProtocolVersion = errors.New("tcap: unsupported protocol version")
+
+	// ErrAbortMultipleReasons reports an Abort with both PAbortCause and
+	// Dialogue set.
+	ErrAbortMultipleReasons = errors.New("tcap: abort has multiple reasons")
+
+	// ErrMissingInvokeID reports an Invoke, a Return Result or a Return Error
+	// whose invoke ID is NULL; only a Reject may omit it (Q.773 Table 18).
+	ErrMissingInvokeID = errors.New("tcap: missing invoke ID")
+
+	// ErrInvalidLinkedID reports a linked ID that is not encoded as
+	// [0] IMPLICIT INTEGER (Q.773 Table 20), such as the X.880 alternative
+	// absent [1] NULL.
+	ErrInvalidLinkedID = errors.New("tcap: invalid linked ID")
+
+	// ErrExternalEncoding reports an External whose Encoding is not one of
+	// the three EXTERNAL encodings, or whose other encoding fields are not
+	// empty.
+	ErrExternalEncoding = errors.New("tcap: invalid EXTERNAL encoding")
+
+	// ErrParameterNotSingleValue reports a parameter or a single-ASN1-type
+	// value that is not exactly one complete BER value, including a missing
+	// result parameter.
+	ErrParameterNotSingleValue = errors.New("tcap: parameter is not one complete BER value")
+
+	// ErrNonMinimalLength reports a length encoded in more octets than
+	// needed, which Q.773 clause 4.1.1 forbids.
+	ErrNonMinimalLength = errors.New("tcap: length not encoded in the minimum number of octets")
+
+	// ErrConstructedString reports an OCTET STRING or a BIT STRING in the
+	// constructed form, which Q.773 clause 4.1.1 forbids.
+	ErrConstructedString = errors.New("tcap: constructed string encoding")
 )
 
-// ParseError represents a parsing error with additional context.
+// Portion names the portion of a TCAP message in which Parse failed.
+type Portion string
+
+// Message portions (ITU-T Q.773 (06/97) clause 4).
+const (
+	PortionTransaction Portion = "transaction"
+	PortionDialogue    Portion = "dialogue"
+	PortionComponent   Portion = "component"
+)
+
+// ParseError reports why Parse failed, with what a TCAP stack needs to apply
+// the abnormal procedures of ITU-T Q.774 (06/97): a P-Abort for a failure in
+// the transaction portion (clause 3.3.4, Table 7), an ABRT from the dialogue
+// service provider for one in the dialogue portion (clause 3.2.2.1), and a
+// Reject for one in the component portion (clause 3.2.2.2, Table 5).
+//
+// None of its fields alias the parsed data.
 type ParseError struct {
-	Op    string // operation that failed
-	Field string // field that caused the error
-	Err   error  // underlying error
+	// MessageType is the type of the message, or "" when the message type is
+	// not recognized or its tag cannot be decoded.
+	MessageType MessageType
+
+	// OTID and DTID are the transaction IDs that could be derived: complete,
+	// well-formed and 1 to 4 octets long. They are nil otherwise.
+	OTID TransactionID
+	DTID TransactionID
+
+	// Portion is the portion of the message that failed.
+	Portion Portion
+
+	// ComponentIndex is the position of the failing component within the
+	// component portion, or -1.
+	ComponentIndex int
+
+	// InvokeID is the invoke ID of the failing component, when it can be
+	// derived.
+	InvokeID *int64
+
+	// Dialogue and Components are set when Portion is PortionComponent:
+	// the decoded dialogue portion, and the valid components that precede
+	// the failing one. Components that follow it are discarded (Q.774 clause
+	// 3.2.2.2).
+	Dialogue   *Dialogue
+	Components []Component
+
+	// Err is the cause.
+	Err error
 }
 
+// Error describes the failure.
 func (e *ParseError) Error() string {
-	if e.Field != "" {
-		return fmt.Sprintf("parse error in %s.%s: %v", e.Op, e.Field, e.Err)
-	}
-	return fmt.Sprintf("parse error in %s: %v", e.Op, e.Err)
+	panic("unimplemented")
 }
 
+// Unwrap returns the cause.
 func (e *ParseError) Unwrap() error {
 	return e.Err
 }
 
-// ValidationError represents a validation error with context.
-type ValidationError struct {
-	Field string
-	Value any
-	Err   error
+// FieldError reports the field of a message that Marshal rejected, by its
+// path from the message, such as "Components[1].Invoke.Parameter".
+type FieldError struct {
+	Path string
+	Err  error
 }
 
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("validation error for %s (value: %v): %v", e.Field, e.Value, e.Err)
+// Error describes the failure.
+func (e *FieldError) Error() string {
+	panic("unimplemented")
 }
 
-func (e *ValidationError) Unwrap() error {
+// Unwrap returns the cause.
+func (e *FieldError) Unwrap() error {
 	return e.Err
-}
-
-func newParseError(op, field string, err error) error {
-	return &ParseError{Op: op, Field: field, Err: err}
-}
-
-func newValidationError(field string, value any, err error) error {
-	return &ValidationError{Field: field, Value: value, Err: err}
 }

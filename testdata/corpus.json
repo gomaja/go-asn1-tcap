@@ -1,0 +1,1461 @@
+[
+  {
+    "id": "begin-otid-1",
+    "valid": true,
+    "hex": "62144801016c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-otid-2",
+    "valid": true,
+    "hex": "6215480201026c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "0102"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-otid-3",
+    "valid": true,
+    "hex": "621648030102036c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "010203"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-otid-4",
+    "valid": true,
+    "hex": "62174804010203046c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-aarq-invoke",
+    "valid": true,
+    "hex": "62374804010203046b1e281c060700118605010101a011600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": {
+        "type": "AARQ",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "user_information": [],
+        "single_asn1_type_hex": "600f80020780a109060704000001001403"
+      },
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-aarq-default-version",
+    "valid": true,
+    "hex": "62334804010203046b1a2818060700118605010101a00d600ba1090607040000010014036c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": {
+        "type": "AARQ",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": false,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "user_information": [],
+        "single_asn1_type_hex": "600ba109060704000001001403"
+      },
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-aarq-map-open",
+    "valid": true,
+    "hex": "62624804010203046b3d283b060700118605010101a030602e80020780a109060704000001001403be1d281b060704000001010101a010a00e800591214365f7810591769810f26c1ba11902010102012d3011800591214365f78101ff820591769810f2",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": {
+        "type": "AARQ",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "user_information": [
+          {
+            "direct_reference": "0.4.0.0.1.1.1.1",
+            "single_asn1_type_hex": "a00e800591214365f7810591769810f2",
+            "map_pdu": "map-open",
+            "destinationReference": "91214365f7",
+            "originationReference": "91769810f2"
+          }
+        ],
+        "single_asn1_type_hex": "602e80020780a109060704000001001403be1d281b060704000001010101a010a00e800591214365f7810591769810f2"
+      },
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "3011800591214365f78101ff820591769810f2"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-indefinite-components-invoke",
+    "valid": true,
+    "hex": "621b4804010203046c80a18002010102012d3005040301020300000000",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-linked-present",
+    "valid": true,
+    "hex": "62134804010203046c0ba10902010380010102013c",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 3,
+          "linkedId": 1,
+          "opcode": {
+            "local": 60
+          },
+          "parameter_hex": null
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-linked-absent",
+    "valid": true,
+    "hex": "62124804010203046c0aa108020103810002013c",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 3,
+          "linkedId": "absent",
+          "opcode": {
+            "local": 60
+          },
+          "parameter_hex": null
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": false,
+    "notes": "linkedId uses the X.880 absent alternative ([1] NULL). ITU-T Q.773 (06/97) Table 20 defines only the [0] Linked ID tag; Wireshark follows that table and reads 02 01 3c as a parameter instead of the operation code."
+  },
+  {
+    "id": "begin-global-opcode",
+    "valid": true,
+    "hex": "62194804010203046c11a10f02010106032a030430050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "global": "1.2.3.4"
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-invokeid--1",
+    "valid": true,
+    "hex": "62174804010203046c0fa10d0201ff02012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": -1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-invokeid--128",
+    "valid": true,
+    "hex": "62174804010203046c0fa10d02018002012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": -128,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-invokeid-127",
+    "valid": true,
+    "hex": "62174804010203046c0fa10d02017f02012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 127,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-opcode-0",
+    "valid": true,
+    "hex": "62174804010203046c0fa10d02010102010030050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 0
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-opcode-127",
+    "valid": true,
+    "hex": "62174804010203046c0fa10d02010102017f30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 127
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-opcode-128",
+    "valid": true,
+    "hex": "62184804010203046c10a10e0201010202008030050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 128
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-opcode--1",
+    "valid": true,
+    "hex": "62174804010203046c0fa10d0201010201ff30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": -1
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "continue-first-backward-aare-result",
+    "valid": true,
+    "hex": "654a4804010203044904050607086b2a2828060700118605010101a01d611b80020780a109060704000001001403a203020100a305a1030201006c10a20e020101300902012d30040402aabb",
+    "intent": {
+      "message_type": "continue",
+      "dialogue": {
+        "type": "AARE",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "result": 0,
+        "diagnostic": {
+          "kind": "user",
+          "value": 0
+        },
+        "user_information": [],
+        "single_asn1_type_hex": "611b80020780a109060704000001001403a203020100a305a103020100"
+      },
+      "components": [
+        {
+          "type": "returnResultLast",
+          "invokeId": 1,
+          "result": {
+            "opcode": {
+              "local": 45
+            },
+            "parameter_hex": "30040402aabb"
+          }
+        }
+      ],
+      "otid": "01020304",
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "continue-result-not-last-then-last",
+    "valid": true,
+    "hex": "652e4804010203044904050607086c20a70e020101300902012d30040402aabba20e020101300902012d30040402aabb",
+    "intent": {
+      "message_type": "continue",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnResultNotLast",
+          "invokeId": 1,
+          "result": {
+            "opcode": {
+              "local": 45
+            },
+            "parameter_hex": "30040402aabb"
+          }
+        },
+        {
+          "type": "returnResultLast",
+          "invokeId": 1,
+          "result": {
+            "opcode": {
+              "local": 45
+            },
+            "parameter_hex": "30040402aabb"
+          }
+        }
+      ],
+      "otid": "01020304",
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-result-invokeid-only",
+    "valid": true,
+    "hex": "640d4904050607086c05a203020101",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnResultLast",
+          "invokeId": 1,
+          "result": null
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-error-local-parameter",
+    "valid": true,
+    "hex": "64154904050607086c0da30b02010102010130030a0100",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnError",
+          "invokeId": 1,
+          "errcode": {
+            "local": 1
+          },
+          "parameter_hex": "30030a0100"
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-error-global",
+    "valid": true,
+    "hex": "64124904050607086c0aa30802010106032a0304",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnError",
+          "invokeId": 1,
+          "errcode": {
+            "global": "1.2.3.4"
+          },
+          "parameter_hex": null
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-error-local-no-parameter",
+    "valid": true,
+    "hex": "64104904050607086c08a306020101020101",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnError",
+          "invokeId": 1,
+          "errcode": {
+            "local": 1
+          },
+          "parameter_hex": null
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-reject-invoke",
+    "valid": true,
+    "hex": "64104904050607086c08a406020101810101",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "reject",
+          "invokeId": 1,
+          "problem": {
+            "kind": "invoke",
+            "value": 1
+          }
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-reject-null-general",
+    "valid": true,
+    "hex": "640f4904050607086c07a4050500800102",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "reject",
+          "invokeId": null,
+          "problem": {
+            "kind": "general",
+            "value": 2
+          }
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-reject-return-result",
+    "valid": true,
+    "hex": "64104904050607086c08a406020101820102",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "reject",
+          "invokeId": 1,
+          "problem": {
+            "kind": "returnResult",
+            "value": 2
+          }
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-reject-return-error",
+    "valid": true,
+    "hex": "64104904050607086c08a406020101830104",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "reject",
+          "invokeId": 1,
+          "problem": {
+            "kind": "returnError",
+            "value": 4
+          }
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-aare-single-response",
+    "valid": true,
+    "hex": "642e4904050607086b262824060700118605010101a0196117a109060704000001001403a203020100a305a103020100",
+    "intent": {
+      "message_type": "end",
+      "dialogue": {
+        "type": "AARE",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": false,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "result": 0,
+        "diagnostic": {
+          "kind": "user",
+          "value": 0
+        },
+        "user_information": [],
+        "single_asn1_type_hex": "6117a109060704000001001403a203020100a305a103020100"
+      },
+      "components": [],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-p-cause-0",
+    "valid": true,
+    "hex": "67094904050607084a0100",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 0
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-p-cause-1",
+    "valid": true,
+    "hex": "67094904050607084a0101",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 1
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-p-cause-2",
+    "valid": true,
+    "hex": "67094904050607084a0102",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 2
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-p-cause-3",
+    "valid": true,
+    "hex": "67094904050607084a0103",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 3
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-p-cause-4",
+    "valid": true,
+    "hex": "67094904050607084a0104",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 4
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-p-cause-127",
+    "valid": true,
+    "hex": "67094904050607084a017f",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 127
+    },
+    "wiresharkAgrees": true,
+    "notes": "Unnamed but within the ASN.1 INTEGER (0..127) constraint; no Q.774 procedural claim."
+  },
+  {
+    "id": "abort-p-cause-5",
+    "valid": true,
+    "hex": "67094904050607084a0105",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 5
+    },
+    "wiresharkAgrees": true,
+    "notes": "Unnamed but within the ASN.1 INTEGER (0..127) constraint; no Q.774 procedural claim."
+  },
+  {
+    "id": "abort-no-reason",
+    "valid": true,
+    "hex": "6706490405060708",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": null
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-aare-map-version-fallback",
+    "valid": true,
+    "hex": "67324904050607086b2a2828060700118605010101a01d611b80020780a109060704000001001402a203020101a305a103020102",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": {
+        "type": "AARE",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.2",
+        "result": 1,
+        "diagnostic": {
+          "kind": "user",
+          "value": 2
+        },
+        "user_information": [],
+        "single_asn1_type_hex": "611b80020780a109060704000001001402a203020101a305a103020102"
+      },
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": null
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-abrt-user-map-userabort",
+    "valid": true,
+    "hex": "672d4904050607086b252823060700118605010101a0186416800100be11280f060704000001010101a004a4028000",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": {
+        "type": "ABRT",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "abort_source": 0,
+        "user_information": [
+          {
+            "direct_reference": "0.4.0.0.1.1.1.1",
+            "single_asn1_type_hex": "a4028000",
+            "map_pdu": "map-userAbort",
+            "userSpecificReason": true
+          }
+        ],
+        "single_asn1_type_hex": "6416800100be11280f060704000001010101a004a4028000"
+      },
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": null
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-abrt-provider",
+    "valid": true,
+    "hex": "671a4904050607086b122810060700118605010101a0056403800101",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": {
+        "type": "ABRT",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "abort_source": 1,
+        "user_information": [],
+        "single_asn1_type_hex": "6403800101"
+      },
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": null
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "abort-aare-provider-no-common-dialogue",
+    "valid": true,
+    "hex": "67324904050607086b2a2828060700118605010101a01d611b80020780a109060704000001001403a203020101a305a203020102",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": {
+        "type": "AARE",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "result": 1,
+        "diagnostic": {
+          "kind": "provider",
+          "value": 2
+        },
+        "user_information": [],
+        "single_asn1_type_hex": "611b80020780a109060704000001001403a203020101a305a203020102"
+      },
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": null
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "unidirectional-audt-invoke",
+    "valid": true,
+    "hex": "61316b1e281c060700118605010201a011600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "unidirectional",
+      "dialogue": {
+        "type": "AUDT",
+        "direct_reference": "0.0.17.773.1.2.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "user_information": [],
+        "single_asn1_type_hex": "600f80020780a109060704000001001403"
+      },
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ]
+    },
+    "wiresharkAgrees": false,
+    "notes": "Wireshark recognises uniDialogue-as-id 0.0.17.773.1.2.1 but labels the AUDT as dialogueRequest, because AARQ and AUDT share the tag [APPLICATION 0]; the decoded fields are correct."
+  },
+  {
+    "id": "unidirectional-invoke-only",
+    "valid": true,
+    "hex": "61116c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "unidirectional",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ]
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-two-invokes",
+    "valid": true,
+    "hex": "62264804010203046c1ea10d02010102012d30050403010203a10d02010202013c30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        },
+        {
+          "type": "invoke",
+          "invokeId": 2,
+          "linkedId": null,
+          "opcode": {
+            "local": 60
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "continue-result-and-invoke",
+    "valid": true,
+    "hex": "652d4804010203044904050607086c1fa20e020101300902012d30040402aabba10d02010202013c30050403010203",
+    "intent": {
+      "message_type": "continue",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnResultLast",
+          "invokeId": 1,
+          "result": {
+            "opcode": {
+              "local": 45
+            },
+            "parameter_hex": "30040402aabb"
+          }
+        },
+        {
+          "type": "invoke",
+          "invokeId": 2,
+          "linkedId": null,
+          "opcode": {
+            "local": 60
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304",
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-error-and-reject",
+    "valid": true,
+    "hex": "641d4904050607086c15a30b02010102010130030a0100a406020102810101",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnError",
+          "invokeId": 1,
+          "errcode": {
+            "local": 1
+          },
+          "parameter_hex": "30030a0100"
+        },
+        {
+          "type": "reject",
+          "invokeId": 2,
+          "problem": {
+            "kind": "invoke",
+            "value": 1
+          }
+        }
+      ],
+      "dtid": "05060708"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-argument-140-octets",
+    "valid": true,
+    "hex": "6281a44804010203046c819ba1819802010102012d30818f04818c000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30818f04818c000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-argument-300-octets",
+    "valid": true,
+    "hex": "628201484804010203046c82013ea182013a02010102012d308201300482012c000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "308201300482012c000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "begin-nonminimal-long-length",
+    "valid": true,
+    "hex": "621a4804010203046c12a11002010102012d30820006048103010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30820006048103010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true,
+    "notes": "BER allows non-minimal length forms; DER requires minimal length forms."
+  },
+  {
+    "id": "begin-aarq-no-components",
+    "valid": true,
+    "hex": "62264804010203046b1e281c060700118605010101a011600f80020780a109060704000001001403",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": {
+        "type": "AARQ",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "user_information": [],
+        "single_asn1_type_hex": "600f80020780a109060704000001001403"
+      },
+      "components": [],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "negative-otid-0",
+    "valid": false,
+    "hex": "621348006c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": ""
+    },
+    "wiresharkAgrees": false,
+    "notes": "OrigTransactionID SIZE(1..4) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-otid-5",
+    "valid": false,
+    "hex": "6218480501020304056c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "0102030405"
+    },
+    "wiresharkAgrees": false,
+    "notes": "OrigTransactionID SIZE(1..4) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-empty-components",
+    "valid": false,
+    "hex": "62084804010203046c00",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": false,
+    "notes": "ComponentPortion SIZE(1..MAX) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-invokeid-128",
+    "valid": false,
+    "hex": "62184804010203046c10a10e0202008002012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 128,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": false,
+    "notes": "TCInvokeIdSet present (-128..127) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-invokeid--129",
+    "valid": false,
+    "hex": "62184804010203046c10a10e0202ff7f02012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": -129,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": false,
+    "notes": "TCInvokeIdSet present (-128..127) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-unknown-message-tag",
+    "valid": false,
+    "hex": "66174804010203046c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "unknown-application-6",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true,
+    "notes": "APPLICATION 6 is not a TCMessage alternative."
+  },
+  {
+    "id": "negative-trailing-octets",
+    "valid": false,
+    "hex": "62174804010203046c0fa10d02010102012d300504030102030500",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304",
+      "trailing_hex": "0500"
+    },
+    "wiresharkAgrees": false,
+    "notes": "Framed packet must contain exactly one TCMessage; trailing NULL is outside it. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-truncated-message",
+    "valid": false,
+    "hex": "62174804010203046c0fa10d02010102012d300504030102",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304",
+      "truncated_octets": 1
+    },
+    "wiresharkAgrees": true,
+    "notes": "Final argument octet missing; lengths left unchanged."
+  },
+  {
+    "id": "negative-primitive-single-asn1-type",
+    "valid": false,
+    "hex": "62374804010203046b1e281c0607001186050101018011600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": {
+        "type": "AARQ",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "user_information": [],
+        "single_asn1_type_hex": "600f80020780a109060704000001001403"
+      },
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": false,
+    "notes": "EXTERNAL encoding single-ASN1-type [0] must be constructed (EXPLICIT). Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-abort-aarq",
+    "valid": false,
+    "hex": "67264904050607086b1e281c060700118605010101a011600f80020780a109060704000001001403",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": {
+        "type": "AARQ",
+        "direct_reference": "0.0.17.773.1.1.1",
+        "protocol_version_present": true,
+        "protocol_version": "version1",
+        "application_context_name": "0.4.0.0.1.0.20.3",
+        "user_information": [],
+        "single_asn1_type_hex": "600f80020780a109060704000001001403"
+      },
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": null
+    },
+    "wiresharkAgrees": false,
+    "notes": "AARQ invalid in Abort dialogue state. BER and the open EXTERNAL type alone do not prohibit it; validity includes dialogue procedure context. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "begin-indefinite-outer",
+    "valid": true,
+    "hex": "62804804010203046c0fa10d02010102012d300504030102030000",
+    "intent": {
+      "message_type": "begin",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "invoke",
+          "invokeId": 1,
+          "linkedId": null,
+          "opcode": {
+            "local": 45
+          },
+          "parameter_hex": "30050403010203"
+        }
+      ],
+      "otid": "01020304"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "end-dtid-one-octet",
+    "valid": true,
+    "hex": "640a4901056c05a203020101",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [
+        {
+          "type": "returnResultLast",
+          "invokeId": 1,
+          "result": null
+        }
+      ],
+      "dtid": "05"
+    },
+    "wiresharkAgrees": true
+  },
+  {
+    "id": "negative-dtid-zero",
+    "valid": false,
+    "hex": "64024900",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [],
+      "dtid": ""
+    },
+    "wiresharkAgrees": false,
+    "notes": "DestTransactionID SIZE(1..4) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-dtid-five",
+    "valid": false,
+    "hex": "640749050102030405",
+    "intent": {
+      "message_type": "end",
+      "dialogue": null,
+      "components": [],
+      "dtid": "0102030405"
+    },
+    "wiresharkAgrees": false,
+    "notes": "DestTransactionID SIZE(1..4) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-unidirectional-no-components",
+    "valid": false,
+    "hex": "6100",
+    "intent": {
+      "message_type": "unidirectional",
+      "dialogue": null,
+      "components": []
+    },
+    "wiresharkAgrees": false,
+    "notes": "Unidirectional requires a nonempty ComponentPortion. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-p-abort-cause-128",
+    "valid": false,
+    "hex": "670a4904050607084a020080",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": 128
+    },
+    "wiresharkAgrees": false,
+    "notes": "P-AbortCause INTEGER(0..127) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  },
+  {
+    "id": "negative-p-abort-cause-minus-one",
+    "valid": false,
+    "hex": "67094904050607084a01ff",
+    "intent": {
+      "message_type": "abort",
+      "dialogue": null,
+      "components": [],
+      "dtid": "05060708",
+      "p_abort_cause": -1
+    },
+    "wiresharkAgrees": false,
+    "notes": "P-AbortCause INTEGER(0..127) violated. Wireshark provides no malformed/expert diagnostic for this invalidity."
+  }
+]
