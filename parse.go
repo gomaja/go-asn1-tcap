@@ -66,6 +66,9 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 			maxElements = config.limits.MaxElements
 		}
 	}
+	// go-asn1 validates decode options when a decoder starts and exports no
+	// separate check (https://github.com/gomaja/go-asn1/issues/141); decoding
+	// empty content runs it without reading data.
 	if _, err := ber.DecodeSequenceChildren(nil, decodeOpts...); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidParseOption, err)
 	}

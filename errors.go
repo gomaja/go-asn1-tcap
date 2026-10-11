@@ -113,9 +113,11 @@ const (
 	PortionComponent   Portion = "component"
 )
 
-// ComponentType names the failing component type ITU-T Q.773 Table 19.
+// ComponentType names a component type of ITU-T Q.773 (06/97) Table 19. It
+// identifies the failing component in a *ParseError.
 type ComponentType string
 
+// Component types, Q.773 Table 19.
 const (
 	ComponentTypeInvoke              ComponentType = "Invoke"
 	ComponentTypeReturnResultLast    ComponentType = "ReturnResultLast"

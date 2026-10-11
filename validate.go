@@ -121,6 +121,8 @@ func validateParameter(data []byte, path string) error {
 	}
 	// X.690 (02/2021) clauses 8.1 and 8.2 require valid BER structure,
 	// including the contents of constructed values and universal tag forms.
+	// The check does not yet cover every universal contents length:
+	// https://github.com/gomaja/go-asn1/issues/140.
 	limits := ber.DecodeLimits{MaxDepth: len(data), MaxElements: len(data), MaxWork: len(data)}
 	if err := ber.ValidateBERElement(data, ber.WithDecodeLimits(limits)); err != nil {
 		return fieldError(path, joinErrors(ErrParameterNotSingleValue, err))
