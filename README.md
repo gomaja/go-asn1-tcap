@@ -150,7 +150,7 @@ prescribes:
 
 ```go
 // Refuse a dialogue whose application context is not supported, and offer
-// version 2 instead (the initiator falls back, 3GPP TS 29.002 clause 5.2).
+// version 2 instead (the initiator falls back, 3GPP TS 29.002 V19.1.0 clause 5.2.1).
 notSupported := wire.AssociateSourceDiagnosticDialogueServiceUserValueApplicationContextNameNotSupportedValue()
 refusal := &tcap.Abort{
     DTID: begin.OTID,
