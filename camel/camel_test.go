@@ -22,108 +22,110 @@ var dottedOID = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))+$`)
 type oidCase struct {
 	name  string
 	value tcap.OID
+	want  tcap.OID // from the specification text, independently of the package
 }
 
 type codeCase struct {
 	name  string
 	value tcap.LocalCode
+	want  tcap.LocalCode // from the specification text, independently of the package
 }
 
 var oids = []oidCase{
-	{"GsmSSFToGsmSCFContextV1", camel.GsmSSFToGsmSCFContextV1},
-	{"GsmSSFToGsmSCFContextV2", camel.GsmSSFToGsmSCFContextV2},
-	{"AssistGsmSSFToGsmSCFContextV2", camel.AssistGsmSSFToGsmSCFContextV2},
-	{"GsmSRFToGsmSCFContextV2", camel.GsmSRFToGsmSCFContextV2},
-	{"GsmSSFSCFGenericContextV3", camel.GsmSSFSCFGenericContextV3},
-	{"GsmSSFSCFAssistHandoffContextV3", camel.GsmSSFSCFAssistHandoffContextV3},
-	{"GsmSRFGsmSCFContextV3", camel.GsmSRFGsmSCFContextV3},
-	{"GprsSSFGsmSCFContextV3", camel.GprsSSFGsmSCFContextV3},
-	{"GsmSCFGprsSSFContextV3", camel.GsmSCFGprsSSFContextV3},
-	{"SMSContextV3", camel.SMSContextV3},
-	{"GsmSSFSCFGenericContextV4", camel.GsmSSFSCFGenericContextV4},
-	{"GsmSSFSCFAssistHandoffContextV4", camel.GsmSSFSCFAssistHandoffContextV4},
-	{"SCFGsmSSFGenericContextV4", camel.SCFGsmSSFGenericContextV4},
-	{"GsmSRFGsmSCFContextV4", camel.GsmSRFGsmSCFContextV4},
-	{"SMSContextV4", camel.SMSContextV4},
-	{"UAbortReasonAS", camel.UAbortReasonAS},
-	{"GPRSReferenceNumberAS", camel.GPRSReferenceNumberAS},
+	{"GsmSSFToGsmSCFContextV1", camel.GsmSSFToGsmSCFContextV1, "0.4.0.0.1.0.50.0"},
+	{"GsmSSFToGsmSCFContextV2", camel.GsmSSFToGsmSCFContextV2, "0.4.0.0.1.0.50.1"},
+	{"AssistGsmSSFToGsmSCFContextV2", camel.AssistGsmSSFToGsmSCFContextV2, "0.4.0.0.1.0.51.1"},
+	{"GsmSRFToGsmSCFContextV2", camel.GsmSRFToGsmSCFContextV2, "0.4.0.0.1.0.52.1"},
+	{"GsmSSFSCFGenericContextV3", camel.GsmSSFSCFGenericContextV3, "0.4.0.0.1.21.3.4"},
+	{"GsmSSFSCFAssistHandoffContextV3", camel.GsmSSFSCFAssistHandoffContextV3, "0.4.0.0.1.21.3.6"},
+	{"GsmSRFGsmSCFContextV3", camel.GsmSRFGsmSCFContextV3, "0.4.0.0.1.20.3.14"},
+	{"GprsSSFGsmSCFContextV3", camel.GprsSSFGsmSCFContextV3, "0.4.0.0.1.21.3.50"},
+	{"GsmSCFGprsSSFContextV3", camel.GsmSCFGprsSSFContextV3, "0.4.0.0.1.21.3.51"},
+	{"SMSContextV3", camel.SMSContextV3, "0.4.0.0.1.21.3.61"},
+	{"GsmSSFSCFGenericContextV4", camel.GsmSSFSCFGenericContextV4, "0.4.0.0.1.23.3.4"},
+	{"GsmSSFSCFAssistHandoffContextV4", camel.GsmSSFSCFAssistHandoffContextV4, "0.4.0.0.1.23.3.6"},
+	{"SCFGsmSSFGenericContextV4", camel.SCFGsmSSFGenericContextV4, "0.4.0.0.1.23.3.8"},
+	{"GsmSRFGsmSCFContextV4", camel.GsmSRFGsmSCFContextV4, "0.4.0.0.1.22.3.14"},
+	{"SMSContextV4", camel.SMSContextV4, "0.4.0.0.1.23.3.61"},
+	{"UAbortReasonAS", camel.UAbortReasonAS, "0.4.0.0.1.1.2.2"},
+	{"GPRSReferenceNumberAS", camel.GPRSReferenceNumberAS, "0.4.0.0.1.1.5.2"},
 }
 
 var operationCodes = []codeCase{
-	{"OpCodeInitialDP", camel.OpCodeInitialDP},
-	{"OpCodeAssistRequestInstructions", camel.OpCodeAssistRequestInstructions},
-	{"OpCodeEstablishTemporaryConnection", camel.OpCodeEstablishTemporaryConnection},
-	{"OpCodeDisconnectForwardConnection", camel.OpCodeDisconnectForwardConnection},
-	{"OpCodeConnectToResource", camel.OpCodeConnectToResource},
-	{"OpCodeConnect", camel.OpCodeConnect},
-	{"OpCodeReleaseCall", camel.OpCodeReleaseCall},
-	{"OpCodeRequestReportBCSMEvent", camel.OpCodeRequestReportBCSMEvent},
-	{"OpCodeEventReportBCSM", camel.OpCodeEventReportBCSM},
-	{"OpCodeCollectInformation", camel.OpCodeCollectInformation},
-	{"OpCodeContinue", camel.OpCodeContinue},
-	{"OpCodeInitiateCallAttempt", camel.OpCodeInitiateCallAttempt},
-	{"OpCodeResetTimer", camel.OpCodeResetTimer},
-	{"OpCodeFurnishChargingInformation", camel.OpCodeFurnishChargingInformation},
-	{"OpCodeApplyCharging", camel.OpCodeApplyCharging},
-	{"OpCodeApplyChargingReport", camel.OpCodeApplyChargingReport},
-	{"OpCodeCallGap", camel.OpCodeCallGap},
-	{"OpCodeCallInformationReport", camel.OpCodeCallInformationReport},
-	{"OpCodeCallInformationRequest", camel.OpCodeCallInformationRequest},
-	{"OpCodeSendChargingInformation", camel.OpCodeSendChargingInformation},
-	{"OpCodePlayAnnouncement", camel.OpCodePlayAnnouncement},
-	{"OpCodePromptAndCollectUserInformation", camel.OpCodePromptAndCollectUserInformation},
-	{"OpCodeSpecializedResourceReport", camel.OpCodeSpecializedResourceReport},
-	{"OpCodeCancel", camel.OpCodeCancel},
-	{"OpCodeActivityTest", camel.OpCodeActivityTest},
-	{"OpCodeInitialDPSMS", camel.OpCodeInitialDPSMS},
-	{"OpCodeFurnishChargingInformationSMS", camel.OpCodeFurnishChargingInformationSMS},
-	{"OpCodeConnectSMS", camel.OpCodeConnectSMS},
-	{"OpCodeRequestReportSMSEvent", camel.OpCodeRequestReportSMSEvent},
-	{"OpCodeEventReportSMS", camel.OpCodeEventReportSMS},
-	{"OpCodeContinueSMS", camel.OpCodeContinueSMS},
-	{"OpCodeReleaseSMS", camel.OpCodeReleaseSMS},
-	{"OpCodeResetTimerSMS", camel.OpCodeResetTimerSMS},
-	{"OpCodeActivityTestGPRS", camel.OpCodeActivityTestGPRS},
-	{"OpCodeApplyChargingGPRS", camel.OpCodeApplyChargingGPRS},
-	{"OpCodeApplyChargingReportGPRS", camel.OpCodeApplyChargingReportGPRS},
-	{"OpCodeCancelGPRS", camel.OpCodeCancelGPRS},
-	{"OpCodeConnectGPRS", camel.OpCodeConnectGPRS},
-	{"OpCodeContinueGPRS", camel.OpCodeContinueGPRS},
-	{"OpCodeEntityReleasedGPRS", camel.OpCodeEntityReleasedGPRS},
-	{"OpCodeFurnishChargingInformationGPRS", camel.OpCodeFurnishChargingInformationGPRS},
-	{"OpCodeInitialDPGPRS", camel.OpCodeInitialDPGPRS},
-	{"OpCodeReleaseGPRS", camel.OpCodeReleaseGPRS},
-	{"OpCodeEventReportGPRS", camel.OpCodeEventReportGPRS},
-	{"OpCodeRequestReportGPRSEvent", camel.OpCodeRequestReportGPRSEvent},
-	{"OpCodeResetTimerGPRS", camel.OpCodeResetTimerGPRS},
-	{"OpCodeSendChargingInformationGPRS", camel.OpCodeSendChargingInformationGPRS},
-	{"OpCodeDFCWithArgument", camel.OpCodeDFCWithArgument},
-	{"OpCodeContinueWithArgument", camel.OpCodeContinueWithArgument},
-	{"OpCodeDisconnectLeg", camel.OpCodeDisconnectLeg},
-	{"OpCodeMoveLeg", camel.OpCodeMoveLeg},
-	{"OpCodeSplitLeg", camel.OpCodeSplitLeg},
-	{"OpCodeEntityReleased", camel.OpCodeEntityReleased},
-	{"OpCodePlayTone", camel.OpCodePlayTone},
+	{"OpCodeInitialDP", camel.OpCodeInitialDP, 0},
+	{"OpCodeAssistRequestInstructions", camel.OpCodeAssistRequestInstructions, 16},
+	{"OpCodeEstablishTemporaryConnection", camel.OpCodeEstablishTemporaryConnection, 17},
+	{"OpCodeDisconnectForwardConnection", camel.OpCodeDisconnectForwardConnection, 18},
+	{"OpCodeConnectToResource", camel.OpCodeConnectToResource, 19},
+	{"OpCodeConnect", camel.OpCodeConnect, 20},
+	{"OpCodeReleaseCall", camel.OpCodeReleaseCall, 22},
+	{"OpCodeRequestReportBCSMEvent", camel.OpCodeRequestReportBCSMEvent, 23},
+	{"OpCodeEventReportBCSM", camel.OpCodeEventReportBCSM, 24},
+	{"OpCodeCollectInformation", camel.OpCodeCollectInformation, 27},
+	{"OpCodeContinue", camel.OpCodeContinue, 31},
+	{"OpCodeInitiateCallAttempt", camel.OpCodeInitiateCallAttempt, 32},
+	{"OpCodeResetTimer", camel.OpCodeResetTimer, 33},
+	{"OpCodeFurnishChargingInformation", camel.OpCodeFurnishChargingInformation, 34},
+	{"OpCodeApplyCharging", camel.OpCodeApplyCharging, 35},
+	{"OpCodeApplyChargingReport", camel.OpCodeApplyChargingReport, 36},
+	{"OpCodeCallGap", camel.OpCodeCallGap, 41},
+	{"OpCodeCallInformationReport", camel.OpCodeCallInformationReport, 44},
+	{"OpCodeCallInformationRequest", camel.OpCodeCallInformationRequest, 45},
+	{"OpCodeSendChargingInformation", camel.OpCodeSendChargingInformation, 46},
+	{"OpCodePlayAnnouncement", camel.OpCodePlayAnnouncement, 47},
+	{"OpCodePromptAndCollectUserInformation", camel.OpCodePromptAndCollectUserInformation, 48},
+	{"OpCodeSpecializedResourceReport", camel.OpCodeSpecializedResourceReport, 49},
+	{"OpCodeCancel", camel.OpCodeCancel, 53},
+	{"OpCodeActivityTest", camel.OpCodeActivityTest, 55},
+	{"OpCodeInitialDPSMS", camel.OpCodeInitialDPSMS, 60},
+	{"OpCodeFurnishChargingInformationSMS", camel.OpCodeFurnishChargingInformationSMS, 61},
+	{"OpCodeConnectSMS", camel.OpCodeConnectSMS, 62},
+	{"OpCodeRequestReportSMSEvent", camel.OpCodeRequestReportSMSEvent, 63},
+	{"OpCodeEventReportSMS", camel.OpCodeEventReportSMS, 64},
+	{"OpCodeContinueSMS", camel.OpCodeContinueSMS, 65},
+	{"OpCodeReleaseSMS", camel.OpCodeReleaseSMS, 66},
+	{"OpCodeResetTimerSMS", camel.OpCodeResetTimerSMS, 67},
+	{"OpCodeActivityTestGPRS", camel.OpCodeActivityTestGPRS, 70},
+	{"OpCodeApplyChargingGPRS", camel.OpCodeApplyChargingGPRS, 71},
+	{"OpCodeApplyChargingReportGPRS", camel.OpCodeApplyChargingReportGPRS, 72},
+	{"OpCodeCancelGPRS", camel.OpCodeCancelGPRS, 73},
+	{"OpCodeConnectGPRS", camel.OpCodeConnectGPRS, 74},
+	{"OpCodeContinueGPRS", camel.OpCodeContinueGPRS, 75},
+	{"OpCodeEntityReleasedGPRS", camel.OpCodeEntityReleasedGPRS, 76},
+	{"OpCodeFurnishChargingInformationGPRS", camel.OpCodeFurnishChargingInformationGPRS, 77},
+	{"OpCodeInitialDPGPRS", camel.OpCodeInitialDPGPRS, 78},
+	{"OpCodeReleaseGPRS", camel.OpCodeReleaseGPRS, 79},
+	{"OpCodeEventReportGPRS", camel.OpCodeEventReportGPRS, 80},
+	{"OpCodeRequestReportGPRSEvent", camel.OpCodeRequestReportGPRSEvent, 81},
+	{"OpCodeResetTimerGPRS", camel.OpCodeResetTimerGPRS, 82},
+	{"OpCodeSendChargingInformationGPRS", camel.OpCodeSendChargingInformationGPRS, 83},
+	{"OpCodeDFCWithArgument", camel.OpCodeDFCWithArgument, 86},
+	{"OpCodeContinueWithArgument", camel.OpCodeContinueWithArgument, 88},
+	{"OpCodeDisconnectLeg", camel.OpCodeDisconnectLeg, 90},
+	{"OpCodeMoveLeg", camel.OpCodeMoveLeg, 93},
+	{"OpCodeSplitLeg", camel.OpCodeSplitLeg, 95},
+	{"OpCodeEntityReleased", camel.OpCodeEntityReleased, 96},
+	{"OpCodePlayTone", camel.OpCodePlayTone, 97},
 }
 
 var errorCodes = []codeCase{
-	{"ErrorCodeCanceled", camel.ErrorCodeCanceled},
-	{"ErrorCodeCancelFailed", camel.ErrorCodeCancelFailed},
-	{"ErrorCodeETCFailed", camel.ErrorCodeETCFailed},
-	{"ErrorCodeImproperCallerResponse", camel.ErrorCodeImproperCallerResponse},
-	{"ErrorCodeMissingCustomerRecord", camel.ErrorCodeMissingCustomerRecord},
-	{"ErrorCodeMissingParameter", camel.ErrorCodeMissingParameter},
-	{"ErrorCodeParameterOutOfRange", camel.ErrorCodeParameterOutOfRange},
-	{"ErrorCodeRequestedInfoError", camel.ErrorCodeRequestedInfoError},
-	{"ErrorCodeSystemFailure", camel.ErrorCodeSystemFailure},
-	{"ErrorCodeTaskRefused", camel.ErrorCodeTaskRefused},
-	{"ErrorCodeUnavailableResource", camel.ErrorCodeUnavailableResource},
-	{"ErrorCodeUnexpectedComponentSequence", camel.ErrorCodeUnexpectedComponentSequence},
-	{"ErrorCodeUnexpectedDataValue", camel.ErrorCodeUnexpectedDataValue},
-	{"ErrorCodeUnexpectedParameter", camel.ErrorCodeUnexpectedParameter},
-	{"ErrorCodeUnknownLegID", camel.ErrorCodeUnknownLegID},
-	{"ErrorCodeUnknownPDPID", camel.ErrorCodeUnknownPDPID},
-	{"ErrorCodeUnknownCSID", camel.ErrorCodeUnknownCSID},
+	{"ErrorCodeCanceled", camel.ErrorCodeCanceled, 0},
+	{"ErrorCodeCancelFailed", camel.ErrorCodeCancelFailed, 1},
+	{"ErrorCodeETCFailed", camel.ErrorCodeETCFailed, 3},
+	{"ErrorCodeImproperCallerResponse", camel.ErrorCodeImproperCallerResponse, 4},
+	{"ErrorCodeMissingCustomerRecord", camel.ErrorCodeMissingCustomerRecord, 6},
+	{"ErrorCodeMissingParameter", camel.ErrorCodeMissingParameter, 7},
+	{"ErrorCodeParameterOutOfRange", camel.ErrorCodeParameterOutOfRange, 8},
+	{"ErrorCodeRequestedInfoError", camel.ErrorCodeRequestedInfoError, 10},
+	{"ErrorCodeSystemFailure", camel.ErrorCodeSystemFailure, 11},
+	{"ErrorCodeTaskRefused", camel.ErrorCodeTaskRefused, 12},
+	{"ErrorCodeUnavailableResource", camel.ErrorCodeUnavailableResource, 13},
+	{"ErrorCodeUnexpectedComponentSequence", camel.ErrorCodeUnexpectedComponentSequence, 14},
+	{"ErrorCodeUnexpectedDataValue", camel.ErrorCodeUnexpectedDataValue, 15},
+	{"ErrorCodeUnexpectedParameter", camel.ErrorCodeUnexpectedParameter, 16},
+	{"ErrorCodeUnknownLegID", camel.ErrorCodeUnknownLegID, 17},
+	{"ErrorCodeUnknownPDPID", camel.ErrorCodeUnknownPDPID, 50},
+	{"ErrorCodeUnknownCSID", camel.ErrorCodeUnknownCSID, 51},
 }
 
 // encodeOID returns the BER encoding (tag, length, contents) of a dotted
@@ -294,6 +296,25 @@ func TestTablesCoverPackage(t *testing.T) {
 	for n := range listed {
 		if !declared[n] {
 			t.Errorf("table entry %s is not declared in the package", n)
+		}
+	}
+}
+
+// TestValuesMatchSpecification compares every constant with the value read
+// from 3GPP TS 29.078 V19.0.0 (clauses 5.3, 5.4, 5.6, 5.7 and 8.1.1), GSM 09.78
+// version 5.6.0 clause 6.5 and version 7.1.0 clause 6.6, and TS 29.078 V4.9.0
+// clause 5.6, so that an edited value cannot pass the uniqueness checks alone.
+func TestValuesMatchSpecification(t *testing.T) {
+	for _, c := range oids {
+		if c.value != c.want {
+			t.Errorf("%s = %q, want %q", c.name, c.value, c.want)
+		}
+	}
+	for _, cases := range [][]codeCase{operationCodes, errorCodes} {
+		for _, c := range cases {
+			if c.value != c.want {
+				t.Errorf("%s = %d, want %d", c.name, c.value, c.want)
+			}
 		}
 	}
 }

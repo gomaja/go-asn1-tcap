@@ -71,44 +71,47 @@ var currentContexts = []contextCase{
 	{"VcsgLocationCancellationContextV3", gsmmap.VcsgLocationCancellationContextV3, gsm_map.VcsgLocationCancellationContextV3},
 }
 
-// reservedContexts lists the 33 reserved contexts, which go-asn1 does not generate.
+// reservedContexts lists the 33 reserved contexts, which go-asn1 does not
+// generate, with their values read from the list of reserved object
+// identifiers in 3GPP TS 29.002 V19.1.0 clause 17.3.3.
 var reservedContexts = []struct {
 	name  string
 	value tcap.OID
+	want  tcap.OID
 }{
-	{"NetworkLocUpContextV1", gsmmap.NetworkLocUpContextV1},
-	{"NetworkLocUpContextV2", gsmmap.NetworkLocUpContextV2},
-	{"LocationCancellationContextV1", gsmmap.LocationCancellationContextV1},
-	{"LocationCancellationContextV2", gsmmap.LocationCancellationContextV2},
-	{"RoamingNumberEnquiryContextV1", gsmmap.RoamingNumberEnquiryContextV1},
-	{"RoamingNumberEnquiryContextV2", gsmmap.RoamingNumberEnquiryContextV2},
-	{"LocationInfoRetrievalContextV1", gsmmap.LocationInfoRetrievalContextV1},
-	{"LocationInfoRetrievalContextV2", gsmmap.LocationInfoRetrievalContextV2},
-	{"ResetContextV1", gsmmap.ResetContextV1},
-	{"ResetContextV2", gsmmap.ResetContextV2},
-	{"HandoverControlContextV1", gsmmap.HandoverControlContextV1},
-	{"HandoverControlContextV2", gsmmap.HandoverControlContextV2},
-	{"SIWFSAllocationContextV3", gsmmap.SIWFSAllocationContextV3},
-	{"EquipmentMngtContextV1", gsmmap.EquipmentMngtContextV1},
-	{"EquipmentMngtContextV2", gsmmap.EquipmentMngtContextV2},
-	{"InfoRetrievalContextV1", gsmmap.InfoRetrievalContextV1},
-	{"InfoRetrievalContextV2", gsmmap.InfoRetrievalContextV2},
-	{"InterVlrInfoRetrievalContextV2", gsmmap.InterVlrInfoRetrievalContextV2},
-	{"SubscriberDataMngtContextV1", gsmmap.SubscriberDataMngtContextV1},
-	{"SubscriberDataMngtContextV2", gsmmap.SubscriberDataMngtContextV2},
-	{"TracingContextV1", gsmmap.TracingContextV1},
-	{"TracingContextV2", gsmmap.TracingContextV2},
-	{"NetworkFunctionalSsContextV1", gsmmap.NetworkFunctionalSsContextV1},
-	{"ShortMsgGatewayContextV1", gsmmap.ShortMsgGatewayContextV1},
-	{"ShortMsgGatewayContextV2", gsmmap.ShortMsgGatewayContextV2},
-	{"ShortMsgRelayContextV1", gsmmap.ShortMsgRelayContextV1},
-	{"ShortMsgAlertContextV1", gsmmap.ShortMsgAlertContextV1},
-	{"MwdMngtContextV1", gsmmap.MwdMngtContextV1},
-	{"MwdMngtContextV2", gsmmap.MwdMngtContextV2},
-	{"ShortMsgMTRelayContextV2", gsmmap.ShortMsgMTRelayContextV2},
-	{"MsPurgingContextV2", gsmmap.MsPurgingContextV2},
-	{"CallControlTransferContextV3", gsmmap.CallControlTransferContextV3},
-	{"GprsLocationInfoRetrievalContextV3", gsmmap.GprsLocationInfoRetrievalContextV3},
+	{"NetworkLocUpContextV1", gsmmap.NetworkLocUpContextV1, "0.4.0.0.1.0.1.1"},
+	{"NetworkLocUpContextV2", gsmmap.NetworkLocUpContextV2, "0.4.0.0.1.0.1.2"},
+	{"LocationCancellationContextV1", gsmmap.LocationCancellationContextV1, "0.4.0.0.1.0.2.1"},
+	{"LocationCancellationContextV2", gsmmap.LocationCancellationContextV2, "0.4.0.0.1.0.2.2"},
+	{"RoamingNumberEnquiryContextV1", gsmmap.RoamingNumberEnquiryContextV1, "0.4.0.0.1.0.3.1"},
+	{"RoamingNumberEnquiryContextV2", gsmmap.RoamingNumberEnquiryContextV2, "0.4.0.0.1.0.3.2"},
+	{"LocationInfoRetrievalContextV1", gsmmap.LocationInfoRetrievalContextV1, "0.4.0.0.1.0.5.1"},
+	{"LocationInfoRetrievalContextV2", gsmmap.LocationInfoRetrievalContextV2, "0.4.0.0.1.0.5.2"},
+	{"ResetContextV1", gsmmap.ResetContextV1, "0.4.0.0.1.0.10.1"},
+	{"ResetContextV2", gsmmap.ResetContextV2, "0.4.0.0.1.0.10.2"},
+	{"HandoverControlContextV1", gsmmap.HandoverControlContextV1, "0.4.0.0.1.0.11.1"},
+	{"HandoverControlContextV2", gsmmap.HandoverControlContextV2, "0.4.0.0.1.0.11.2"},
+	{"SIWFSAllocationContextV3", gsmmap.SIWFSAllocationContextV3, "0.4.0.0.1.0.12.3"},
+	{"EquipmentMngtContextV1", gsmmap.EquipmentMngtContextV1, "0.4.0.0.1.0.13.1"},
+	{"EquipmentMngtContextV2", gsmmap.EquipmentMngtContextV2, "0.4.0.0.1.0.13.2"},
+	{"InfoRetrievalContextV1", gsmmap.InfoRetrievalContextV1, "0.4.0.0.1.0.14.1"},
+	{"InfoRetrievalContextV2", gsmmap.InfoRetrievalContextV2, "0.4.0.0.1.0.14.2"},
+	{"InterVlrInfoRetrievalContextV2", gsmmap.InterVlrInfoRetrievalContextV2, "0.4.0.0.1.0.15.2"},
+	{"SubscriberDataMngtContextV1", gsmmap.SubscriberDataMngtContextV1, "0.4.0.0.1.0.16.1"},
+	{"SubscriberDataMngtContextV2", gsmmap.SubscriberDataMngtContextV2, "0.4.0.0.1.0.16.2"},
+	{"TracingContextV1", gsmmap.TracingContextV1, "0.4.0.0.1.0.17.1"},
+	{"TracingContextV2", gsmmap.TracingContextV2, "0.4.0.0.1.0.17.2"},
+	{"NetworkFunctionalSsContextV1", gsmmap.NetworkFunctionalSsContextV1, "0.4.0.0.1.0.18.1"},
+	{"ShortMsgGatewayContextV1", gsmmap.ShortMsgGatewayContextV1, "0.4.0.0.1.0.20.1"},
+	{"ShortMsgGatewayContextV2", gsmmap.ShortMsgGatewayContextV2, "0.4.0.0.1.0.20.2"},
+	{"ShortMsgRelayContextV1", gsmmap.ShortMsgRelayContextV1, "0.4.0.0.1.0.21.1"},
+	{"ShortMsgAlertContextV1", gsmmap.ShortMsgAlertContextV1, "0.4.0.0.1.0.23.1"},
+	{"MwdMngtContextV1", gsmmap.MwdMngtContextV1, "0.4.0.0.1.0.24.1"},
+	{"MwdMngtContextV2", gsmmap.MwdMngtContextV2, "0.4.0.0.1.0.24.2"},
+	{"ShortMsgMTRelayContextV2", gsmmap.ShortMsgMTRelayContextV2, "0.4.0.0.1.0.25.2"},
+	{"MsPurgingContextV2", gsmmap.MsPurgingContextV2, "0.4.0.0.1.0.27.2"},
+	{"CallControlTransferContextV3", gsmmap.CallControlTransferContextV3, "0.4.0.0.1.0.6.3"},
+	{"GprsLocationInfoRetrievalContextV3", gsmmap.GprsLocationInfoRetrievalContextV3, "0.4.0.0.1.0.33.3"},
 }
 
 // operationCodes pairs every OpCode constant with the go-asn1 constant of the same code.
@@ -257,4 +260,16 @@ var errorCodes = []codeCase{
 	{"ErrorCodeUnknownBaseStation", gsmmap.ErrorCodeUnknownBaseStation, gsm_map.GSMMAPLocalErrorcodeUnknownBaseStation},
 	{"ErrorCodeInvalidTargetBaseStation", gsmmap.ErrorCodeInvalidTargetBaseStation, gsm_map.GSMMAPLocalErrorcodeInvalidTargetBaseStation},
 	{"ErrorCodeNoRadioResourceAvailable", gsmmap.ErrorCodeNoRadioResourceAvailable, gsm_map.GSMMAPLocalErrorcodeNoRadioResourceAvailable},
+}
+
+// equivalentContexts lists the application context names that 3GPP TS 29.002
+// V19.1.0 clause 17.3.2 assigns to v1- or v2-equivalent application contexts
+// without listing them in clause 17.3.3, with their values read from that
+// clause.
+var equivalentContexts = []struct {
+	name  string
+	value tcap.OID
+	want  tcap.OID
+}{
+	{"ShortMsgMORelayContextV2", gsmmap.ShortMsgMORelayContextV2, "0.4.0.0.1.0.21.2"}, // clause 17.3.2.22
 }

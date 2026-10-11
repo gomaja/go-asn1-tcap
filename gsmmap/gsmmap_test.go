@@ -104,8 +104,11 @@ func TestOIDsCanonicalAndUnique(t *testing.T) {
 	for _, c := range reservedContexts {
 		add(c.name, c.value)
 	}
+	for _, c := range equivalentContexts {
+		add(c.name, c.value)
+	}
 	add("DialogueAS", gsmmap.DialogueAS)
-	if want := 44 + 33 + 1; len(seen) != want {
+	if want := 44 + 33 + 1 + 1; len(seen) != want {
 		t.Errorf("%d distinct OIDs, want %d", len(seen), want)
 	}
 }
@@ -160,6 +163,9 @@ func TestTablesCoverPackage(t *testing.T) {
 	for _, c := range reservedContexts {
 		listed[c.name] = true
 	}
+	for _, c := range equivalentContexts {
+		listed[c.name] = true
+	}
 	for _, c := range operationCodes {
 		listed[c.name] = true
 	}
@@ -174,6 +180,22 @@ func TestTablesCoverPackage(t *testing.T) {
 	for n := range listed {
 		if !declared[n] {
 			t.Errorf("table entry %s is not declared in the package", n)
+		}
+	}
+}
+
+// TestContextsMatchSpecification compares the contexts that go-asn1 does not
+// generate with the values read from 3GPP TS 29.002 V19.1.0 clauses 17.3.2 and
+// 17.3.3.
+func TestContextsMatchSpecification(t *testing.T) {
+	for _, c := range reservedContexts {
+		if c.value != c.want {
+			t.Errorf("%s = %q, want %q", c.name, c.value, c.want)
+		}
+	}
+	for _, c := range equivalentContexts {
+		if c.value != c.want {
+			t.Errorf("%s = %q, want %q", c.name, c.value, c.want)
 		}
 	}
 }

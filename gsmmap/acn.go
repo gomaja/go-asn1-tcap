@@ -97,3 +97,11 @@ const (
 	CallControlTransferContextV3       tcap.OID = "0.4.0.0.1.0.6.3"  // callControlTransferContext-v3
 	GprsLocationInfoRetrievalContextV3 tcap.OID = "0.4.0.0.1.0.33.3" // gprsLocationInfoRetrievalContext-v3
 )
+
+// Application context names that 3GPP TS 29.002 V19.1.0 clause 17.3.2 assigns
+// to the v1- or v2-equivalent application context of a current context
+// without listing them among the reserved object identifiers of clause
+// 17.3.3.
+const (
+	ShortMsgMORelayContextV2 tcap.OID = "0.4.0.0.1.0.21.2" // shortMsgMO-RelayContext v2-equivalent, clause 17.3.2.22
+)
