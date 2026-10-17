@@ -19,13 +19,13 @@ func decodeMessage(w *wire.TCMessage, opts []ber.DecodeOption) (Message, *ParseE
 	var cause *wire.PAbortCause
 	switch w.Choice {
 	case wire.TCMessageChoiceBegin:
-		mt, otid, dp, cp = MessageTypeBegin, w.Begin.Otid, w.Begin.DialoguePortion, w.Begin.Components
+		mt, otid, dp, cp = MessageTypeBegin, w.Begin.Otid, w.Begin.DialoguePortion, componentsFromBegin(w.Begin.Components)
 	case wire.TCMessageChoiceContinue:
-		mt, otid, dtid, dp, cp = MessageTypeContinue, w.Continue.Otid, w.Continue.Dtid, w.Continue.DialoguePortion, w.Continue.Components
+		mt, otid, dtid, dp, cp = MessageTypeContinue, w.Continue.Otid, w.Continue.Dtid, w.Continue.DialoguePortion, componentsFromContinue(w.Continue.Components)
 	case wire.TCMessageChoiceEnd:
-		mt, dtid, dp, cp = MessageTypeEnd, w.End.Dtid, w.End.DialoguePortion, w.End.Components
+		mt, dtid, dp, cp = MessageTypeEnd, w.End.Dtid, w.End.DialoguePortion, componentsFromEnd(w.End.Components)
 	case wire.TCMessageChoiceUnidirectional:
-		mt, dp, cp = MessageTypeUnidirectional, w.Unidirectional.DialoguePortion, w.Unidirectional.Components
+		mt, dp, cp = MessageTypeUnidirectional, w.Unidirectional.DialoguePortion, componentsFromUnidirectional(w.Unidirectional.Components)
 	case wire.TCMessageChoiceAbort:
 		mt, dtid = MessageTypeAbort, w.Abort.Dtid
 		if r := w.Abort.Reason; r != nil {
@@ -95,8 +95,9 @@ func decodeComponents(cp *wire.ComponentPortion, opts []ber.DecodeOption) ([]Com
 	return out, -1, nil
 }
 
-// Q.773 clause 4.2.2.2; strict constraints and tolerated reports share the codec API.
-func decodeID(v *big.Int, path string, opts []ber.DecodeOption) (int64, error) {
+// decodeComponentID applies the TCAP bound described by checkEncodeComponentID
+// to the unconstrained X.880 INTEGER bindings, with the caller's tolerance.
+func decodeComponentID(v *big.Int, path string, opts []ber.DecodeOption) (int64, error) {
 	if v == nil {
 		return 0, ErrMissingInvokeID
 	}
@@ -112,7 +113,7 @@ func decodeID(v *big.Int, path string, opts []ber.DecodeOption) (int64, error) {
 	return id, nil
 }
 
-func decodeComponent(c wire.Component, path string, opts []ber.DecodeOption) (Component, error) {
+func decodeComponent(c wire.ComponentPortionElemBound, path string, opts []ber.DecodeOption) (Component, error) {
 	var out Component
 	if c.ReturnResultNotLast != nil {
 		v, err := decodeResult(c.ReturnResultNotLast, path+".ReturnResultNotLast", opts)
@@ -126,17 +127,16 @@ func decodeComponent(c wire.Component, path string, opts []ber.DecodeOption) (Co
 	switch {
 	case r.Invoke != nil:
 		w, p := r.Invoke, path+".Invoke"
-		id, err := decodeID(w.InvokeId.Present, p+".InvokeID", opts)
-		if err != nil {
-			return out, err
+		if w.InvokeId.Present == nil {
+			return out, ErrMissingInvokeID
 		}
-		v := &Invoke{InvokeID: id}
+		v := &Invoke{InvokeID: *w.InvokeId.Present}
 		if w.LinkedId != nil {
 			// Q.773 Table 20 defines only [0] IMPLICIT INTEGER for linked IDs.
 			if w.LinkedId.Present == nil {
 				return out, ErrInvalidLinkedID
 			}
-			linked, err := decodeID(w.LinkedId.Present, p+".LinkedID", opts)
+			linked, err := decodeComponentID(w.LinkedId.Present, p+".LinkedID", opts)
 			if err != nil {
 				return out, err
 			}
@@ -158,8 +158,8 @@ func decodeComponent(c wire.Component, path string, opts []ber.DecodeOption) (Co
 		}
 		out.ReturnResultLast = v
 	case r.ReturnError != nil:
-		w, p := r.ReturnError, path+".ReturnError"
-		id, err := decodeID(w.InvokeId.Present, p+".InvokeID", opts)
+		w := r.ReturnError
+		id, err := decodeComponentID(w.InvokeId.Present, path+".ReturnError.InvokeID", opts)
 		if err != nil {
 			return out, err
 		}
@@ -177,7 +177,7 @@ func decodeComponent(c wire.Component, path string, opts []ber.DecodeOption) (Co
 		v := &Reject{Problem: Problem{General: clonePointer(w.Problem.General), Invoke: clonePointer(w.Problem.Invoke), ReturnResult: clonePointer(w.Problem.ReturnResult), ReturnError: clonePointer(w.Problem.ReturnError)}}
 		// Q.773 Table 18 permits NULL only for a Reject invoke ID.
 		if w.InvokeId.Present != nil {
-			id, err := decodeID(w.InvokeId.Present, path+".Reject.InvokeID", opts)
+			id, err := decodeComponentID(w.InvokeId.Present, path+".Reject.InvokeID", opts)
 			if err != nil {
 				return out, err
 			}
@@ -191,7 +191,7 @@ func decodeComponent(c wire.Component, path string, opts []ber.DecodeOption) (Co
 }
 
 func decodeResult(w *wire.ReturnResult, path string, opts []ber.DecodeOption) (*ReturnResult, error) {
-	id, err := decodeID(w.InvokeId.Present, path+".InvokeID", opts)
+	id, err := decodeComponentID(w.InvokeId.Present, path+".InvokeID", opts)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func decodeCode(w wire.Code) (Code, error) {
 		}
 		return LocalCode(w.Local.Int64()), nil
 	}
-	oid, err := OIDFromArcs(w.Global...)
+	oid, err := decodeOID(*w.Global)
 	if err != nil {
 		return nil, err
 	}

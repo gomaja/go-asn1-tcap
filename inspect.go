@@ -28,22 +28,49 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	if !t.Constructed {
 		return pe
 	}
-	_, n, value, err := ber.DecodeTLV(data, opts...)
+	// go-asn1 validates the whole message and locates its first failure
+	// (ber.ElementError). Once the decode limits are exceeded, IDs are taken
+	// only from the top-level elements examined before that location.
+	validation := ber.ValidateBERElement(data, opts...)
+	if transactionOnly || errors.Is(validation, ber.ErrResourceLimit) {
+		contents, _ := inspectedContents(data)
+		var children messageChildren
+		for i := validatedPrefix(validation); i > 0 && len(contents) > 0; i-- {
+			_, n, _, err := ber.DecodeTLV(contents, opts...)
+			if err != nil {
+				break
+			}
+			children.add(contents[:n])
+			contents = contents[n:]
+		}
+		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, true, opts)
+		if !transactionOnly {
+			pe.Err = joinErrors(pe.Err, firstLimit(validation))
+		}
+		return pe
+	}
+	_, n, value, err := inspectTLV(data, opts, limits, true)
 	if err != nil {
 		// Q.774 Table 7: the leading IDs may still be derivable when a later
 		// part of the message cannot be decoded.
 		contents, indefinite := inspectedContents(data)
 		children, scanErr := scanChildren(contents, indefinite, limits)
 		limit := firstLimit(err, scanErr)
-		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, transactionOnly || limit != nil, limits, opts)
-		if !transactionOnly && limit != nil {
+		if limit != nil {
+			children = children.prefix(validLeading(children.leading, opts))
+		}
+		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, limit != nil, opts)
+		if limit != nil {
 			pe.Err = joinErrors(pe.Err, limit)
 		}
 		return pe
 	}
 	children, err := scanChildren(value, false, limits)
 	limit := firstLimit(err)
-	pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, transactionOnly || limit != nil, limits, opts)
+	if limit != nil {
+		children = children.prefix(validLeading(children.leading, opts))
+	}
+	pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, limit != nil, opts)
 	if !transactionOnly && limit != nil {
 		pe.Err = joinErrors(pe.Err, limit)
 	}
@@ -52,12 +79,12 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	}
 	// Q.773 clause 3.1 and Tables 3-7 establish the transaction portion
 	// before Q.774 clause 3.2.2.2 permits inspection of the other portions.
-	if transactionOnly || pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, limits, opts) {
+	if transactionOnly || pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, opts) {
 		return pe
 	}
 	var dialogue *Dialogue
 	for _, data := range children.leading {
-		t, _, value, _ := ber.DecodeTLV(data, opts...)
+		t, _, value, _ := inspectTLV(data, opts, limits, false)
 		switch t.Number {
 		case 11:
 			var w wire.DialoguePortion
@@ -79,7 +106,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			var prefix []Component
 			index := 0
 			for len(value) > 0 {
-				ct, n, content, err := ber.DecodeTLV(value, opts...)
+				ct, n, content, err := inspectTLV(value, opts, limits, false)
 				if errors.Is(err, ber.ErrResourceLimit) {
 					pe.Err = err
 					return pe
@@ -102,7 +129,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 				} else {
 					var w wire.Component
 					if err = w.UnmarshalBER(value[:n], opts...); err == nil {
-						c, err = decodeComponent(w, fmt.Sprintf("Components[%d]", index), opts)
+						c, err = decodeComponent(componentValue(w), fmt.Sprintf("Components[%d]", index), opts)
 					}
 				}
 				if errors.Is(err, ber.ErrResourceLimit) {
@@ -148,6 +175,37 @@ type messageChildren struct {
 // 3.1, Continue); inspection keeps one more to see that a message has more.
 const leadingChildren = 5
 
+// prefix keeps only the first n leading children, the elements from which
+// IDs may be taken at their positions once the decode limits are exceeded.
+func (c messageChildren) prefix(n int) messageChildren {
+	c.leading = c.leading[:min(n, len(c.leading))]
+	return c
+}
+
+// validatedPrefix returns the number of top-level elements of a message that
+// ber.ValidateBERElement examined within the limits before the element at
+// which err, its result, locates a failure. Without a location there are none;
+// go-asn1 locates a MaxWork failure at the root: https://github.com/gomaja/go-asn1/issues/155.
+func validatedPrefix(err error) int {
+	var located *ber.ElementError
+	if !errors.As(err, &located) || len(located.ChildIndexes()) == 0 {
+		return 0
+	}
+	return located.ChildIndexes()[0]
+}
+
+// validLeading returns how many of the leading children, in order, are valid
+// within the decode limits, as ber.ValidateBERElement checks them. It bounds
+// the IDs taken at their positions when the inspection meets a limit itself.
+func validLeading(leading [][]byte, opts []ber.DecodeOption) int {
+	for i, child := range leading {
+		if ber.ValidateBERElement(child, opts...) != nil {
+			return i
+		}
+	}
+	return len(leading)
+}
+
 func (c *messageChildren) add(child []byte) {
 	if t, err := ber.PeekTag(child); err == nil && t.Class == tag.ClassApplication && (t.Number == 8 || t.Number == 9) {
 		c.idCount[t.Number-8]++
@@ -192,6 +250,7 @@ func scanChildren(data []byte, indefinite bool, limits ber.DecodeLimits) (messag
 type scanBudget struct {
 	limits         ber.DecodeLimits
 	elements, work int
+	messageRoot    bool
 }
 
 // elementLength returns the length of the element at the start of data. A
@@ -226,7 +285,11 @@ func (b *scanBudget) elementLength(data []byte) (int, error) {
 			// X.690 clause 8.1.3.2 a): a primitive encoding has a definite length.
 			return 0, ber.ErrInvalidLength
 		case indefinite:
-			if depth++; 1+depth > b.limits.MaxDepth {
+			ancestors := 1
+			if b.messageRoot {
+				ancestors = 0
+			}
+			if depth++; ancestors+depth > b.limits.MaxDepth {
 				return 0, ber.ErrResourceLimit
 			}
 		case length > len(data)-pos:
@@ -265,7 +328,7 @@ func inspectedContents(data []byte) ([]byte, bool) {
 
 // ITU-T Q.773 (06/97) clause 3.1 and Tables 3-7 define immediate child order.
 // Transaction IDs admit the BER string forms of X.690 (02/2021) clause 8.7.
-func soundTransaction(kept messageChildren, mt MessageType, limits ber.DecodeLimits, opts []ber.DecodeOption) bool {
+func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOption) bool {
 	if kept.count > len(kept.leading) {
 		return false
 	}
@@ -288,7 +351,7 @@ func soundTransaction(kept messageChildren, mt MessageType, limits ber.DecodeLim
 		if err != nil || t.Class != tag.ClassApplication || t.Number != number {
 			return false
 		}
-		id, ok := transactionIDValue(children[pos], limits, tidMaxLen(opts))
+		id, ok := transactionIDValue(children[pos], opts)
 		if !ok || len(id) < 1 && !ber.ConstraintToleranceEnabled(opts) {
 			return false
 		}
@@ -319,21 +382,21 @@ func soundTransaction(kept messageChildren, mt MessageType, limits ber.DecodeLim
 }
 
 func applicationChild(data []byte, number int, opts []ber.DecodeOption) bool {
-	t, _, _, err := ber.DecodeTLV(data, opts...)
+	t, err := ber.PeekTag(data)
 	return err == nil && t.Class == tag.ClassApplication && t.Constructed && t.Number == number
 }
 
 // Q.774 Table 7 derives IDs only at Q.773 clause 3.1 positions; UNKNOWN
 // messages admit unique first-level IDs. Duplicates are not derivable. When
-// the message exceeds the decode limits, the IDs at their positions are
-// taken without looking for repetitions if the message up to them stays
-// within the limits, and an UNKNOWN message has none.
-func inspectedTIDs(children messageChildren, mt MessageType, limited bool, limits ber.DecodeLimits, opts []ber.DecodeOption) (TransactionID, TransactionID) {
+// the message exceeds the decode limits, children holds only the elements
+// examined within them, the IDs at their positions are taken without looking
+// for repetitions, and an UNKNOWN message has none.
+func inspectedTIDs(children messageChildren, mt MessageType, limited bool, opts []ber.DecodeOption) (TransactionID, TransactionID) {
 	var ids [2]TransactionID
 	for i := range ids {
 		var element []byte
 		if limited {
-			if pos := tidPosition(mt, i); pos >= 0 && pos < len(children.leading) && leadingWithinLimits(children.leading[:pos+1], limits) {
+			if pos := tidPosition(mt, i); pos >= 0 && pos < len(children.leading) {
 				element = children.leading[pos]
 			}
 		} else if children.idCount[i] == 1 && (mt == "" || tidPosition(mt, i) == children.idPos[i]) {
@@ -346,7 +409,7 @@ func inspectedTIDs(children messageChildren, mt MessageType, limited bool, limit
 		if err != nil || t.Class != tag.ClassApplication || t.Number != 8+i {
 			continue
 		}
-		if id, ok := transactionIDValue(element, limits, tidMaxLen(opts)); ok {
+		if id, ok := transactionIDValue(element, opts); ok {
 			ids[i] = derivableTID(id, ber.ConstraintToleranceEnabled(opts))
 		}
 	}
@@ -368,157 +431,46 @@ func tidPosition(mt MessageType, i int) int {
 	return -1
 }
 
-// leadingWithinLimits reports whether the leading elements of a message stay
-// within limits as the decoder counts them: MaxElements the message and
-// every element in them, MaxDepth the levels of nesting from the message,
-// and MaxWork their octets.
-func leadingWithinLimits(elements [][]byte, limits ber.DecodeLimits) bool {
-	type frame struct {
-		end        int
-		indefinite bool
+// transactionIDValue decodes the BER string forms in ITU-T X.690
+// (02/2021) clause 8.7 with the caller's options. Q.773 clause 3.1 limits
+// the resulting transaction ID to 1..4 octets unless constraints are tolerated.
+func transactionIDValue(element []byte, opts []ber.DecodeOption) ([]byte, bool) {
+	t, n, value, err := ber.DecodeTLV(element, opts...)
+	if err != nil || n != len(element) {
+		return nil, false
 	}
-	count, work := 1, 0
-	for _, e := range elements {
-		if work += len(e); work > limits.MaxWork {
-			return false
-		}
-		var open []frame
-		pos := 0
-		for {
-			if n := len(open); n > 0 {
-				top := open[n-1]
-				if top.indefinite && len(e)-pos >= 2 && e[pos] == 0 && e[pos+1] == 0 {
-					pos += 2
-					open = open[:n-1]
-					continue
-				}
-				if !top.indefinite && pos == top.end {
-					open = open[:n-1]
-					continue
-				}
-			} else if pos > 0 {
-				break
-			}
-			if count++; count > limits.MaxElements {
-				return false
-			}
-			t, tn, err := ber.DecodeTag(e[pos:])
-			if err != nil {
-				return false
-			}
-			length, indefinite, ln, err := ber.DecodeLength(e[pos+tn:])
-			if err != nil {
-				return false
-			}
-			pos += tn + ln
-			switch {
-			case t.Constructed && 2+len(open) > limits.MaxDepth:
-				return false
-			case t.Constructed && indefinite:
-				open = append(open, frame{indefinite: true})
-			case indefinite || length > len(e)-pos || len(open) > 0 && !open[len(open)-1].indefinite && pos+length > open[len(open)-1].end:
-				return false
-			case t.Constructed:
-				open = append(open, frame{end: pos + length})
-			default:
-				pos += length
-			}
-		}
-		if pos != len(e) {
-			return false
-		}
+	id, err := ber.DecodeImplicitOctetStringValue(t.Constructed, value, opts...)
+	if err != nil {
+		return nil, false
 	}
-	return true
+	if !ber.ConstraintToleranceEnabled(opts) && (len(id) < 1 || len(id) > 4) {
+		return nil, false
+	}
+	return id, true
 }
 
-// transactionIDValue returns the value of a transaction ID element, encoded
-// as an OCTET STRING (X.690 (02/2021) clause 8.7): the contents of a
-// primitive element, or the contents of the primitive OCTET STRING segments
-// of a constructed one in order. As ber.DecodeOctetString allows, segments
-// nest at most MaxDepth levels below the element, and the element and its
-// segments number at most MaxElements. It reads each octet once, where the
-// decoder charges the octets of a segment again at every level, and stops at
-// a value longer than maxLen unless maxLen is negative.
-func transactionIDValue(element []byte, limits ber.DecodeLimits, maxLen int) ([]byte, bool) {
-	// bound is the end of the innermost definite element around a segment.
-	type frame struct {
-		end, bound int
-		indefinite bool
+// inspectTLV delimits malformed indefinite children so Q.774 Table 5 can
+// locate the first failing component. DecodeTLV checks nested universal forms
+// only in indefinite values: https://github.com/gomaja/go-asn1/issues/152.
+// This fallback goes once DecodeTLV delimits both length forms alike.
+func inspectTLV(data []byte, opts []ber.DecodeOption, limits ber.DecodeLimits, messageRoot bool) (tag.Tag, int, []byte, error) {
+	t, n, value, err := ber.DecodeTLV(data, opts...)
+	if err == nil || errors.Is(err, ber.ErrResourceLimit) {
+		return t, n, value, err
 	}
-	t, tn, err := ber.DecodeTag(element)
+	n, scanErr := (&scanBudget{limits: limits, messageRoot: messageRoot}).elementLength(data)
+	if scanErr != nil {
+		return t, 0, nil, err
+	}
+	t, err = ber.PeekTag(data)
 	if err != nil {
-		return nil, false
+		return t, 0, nil, err
 	}
-	length, indefinite, ln, err := ber.DecodeLength(element[tn:])
-	if err != nil {
-		return nil, false
-	}
-	pos := tn + ln
-	if !indefinite && length > len(element)-pos {
-		return nil, false
-	}
-	if !t.Constructed {
-		if indefinite || pos+length != len(element) || maxLen >= 0 && length > maxLen {
-			return nil, false
-		}
-		return element[pos:], true
-	}
-	value, elements := []byte{}, 1
-	open := []frame{{end: pos + length, bound: pos + length, indefinite: indefinite}}
+	value, indefinite := inspectedContents(data[:n])
 	if indefinite {
-		open[0].bound = len(element)
+		value = value[:len(value)-2]
 	}
-	for len(open) > 0 {
-		top := open[len(open)-1]
-		if top.indefinite && top.bound-pos >= 2 && element[pos] == 0 && element[pos+1] == 0 {
-			pos += 2
-			open = open[:len(open)-1]
-			continue
-		}
-		if !top.indefinite && pos >= top.end {
-			if pos > top.end {
-				return nil, false
-			}
-			open = open[:len(open)-1]
-			continue
-		}
-		bound := top.bound
-		st, stn, err := ber.DecodeTag(element[pos:bound])
-		if elements++; err != nil || st.Class != tag.ClassUniversal || st.Number != tag.TagOctetString || len(open) > limits.MaxDepth || elements > limits.MaxElements {
-			return nil, false
-		}
-		slen, sindefinite, sln, err := ber.DecodeLength(element[pos+stn : bound])
-		if err != nil {
-			return nil, false
-		}
-		pos += stn + sln
-		switch {
-		case !sindefinite && slen > bound-pos:
-			return nil, false
-		case st.Constructed && sindefinite:
-			open = append(open, frame{bound: bound, indefinite: true})
-		case st.Constructed:
-			open = append(open, frame{end: pos + slen, bound: pos + slen})
-		case sindefinite || maxLen >= 0 && len(value)+slen > maxLen:
-			return nil, false
-		default:
-			value = append(value, element[pos:pos+slen]...)
-			pos += slen
-		}
-	}
-	if pos != len(element) {
-		return nil, false
-	}
-	return value, true
-}
-
-// tidMaxLen is the longest transaction ID worth decoding: 4 octets (Q.773
-// clause 3.1), or any length with constraint tolerance.
-func tidMaxLen(opts []ber.DecodeOption) int {
-	if ber.ConstraintToleranceEnabled(opts) {
-		return -1
-	}
-	return 4
+	return t, n, value, nil
 }
 
 // firstLimit returns the first of errs that is a decode limit, or nil.

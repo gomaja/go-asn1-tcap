@@ -392,7 +392,7 @@ func TestParseReceiverComponentRules(t *testing.T) {
 		// X.880 InvokeId absent (NULL) is for a Reject only (Q.773 Table 18).
 		{"invoke with NULL invoke ID", "62164804010203046c0ea10c050002012d30050403010203", parseErrWant{
 			portions: []tcap.Portion{tcap.PortionComponent}, msgTypes: []tcap.MessageType{tcap.MessageTypeBegin},
-			otid: "01020304", dtid: unchecked, compIndex: idx0, invokeID: "", is: tcap.ErrMissingInvokeID, noComponents: true,
+			otid: "01020304", dtid: unchecked, compIndex: idx0, invokeID: "", constraint: true, noComponents: true,
 		}},
 		{"return result with NULL invoke ID", "640c4904050607086c04a2020500", parseErrWant{
 			portions: []tcap.Portion{tcap.PortionComponent}, msgTypes: []tcap.MessageType{tcap.MessageTypeEnd},

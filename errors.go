@@ -7,7 +7,8 @@ import (
 )
 
 // Errors reported by Marshal and Parse. ASN.1 size and value constraints are
-// reported as *ber.ConstraintError instead.
+// reported as *ber.ConstraintError instead. BER structure errors retain the
+// codec's causes, including parameter and EXTERNAL single-ASN1-type errors.
 var (
 	// ErrEmptyData reports that Parse received no octets.
 	ErrEmptyData = errors.New("tcap: empty data")
@@ -83,8 +84,10 @@ var (
 	// Dialogue set.
 	ErrAbortMultipleReasons = errors.New("tcap: abort has multiple reasons")
 
-	// ErrMissingInvokeID reports an Invoke, a Return Result or a Return Error
-	// whose invoke ID is NULL; only a Reject may omit it (Q.773 Table 18).
+	// ErrMissingInvokeID reports a Return Result or a Return Error whose
+	// invoke ID is NULL, or such an Invoke parsed with WithConstraintTolerance;
+	// only a Reject may omit it (Q.773 Table 18). Without tolerance, the codec
+	// reports a NULL Invoke ID as a *ber.ConstraintError.
 	ErrMissingInvokeID = errors.New("tcap: missing invoke ID")
 
 	// ErrInvalidLinkedID reports a linked ID that is not encoded as
@@ -96,11 +99,6 @@ var (
 	// the three EXTERNAL encodings, or whose other encoding fields are not
 	// empty.
 	ErrExternalEncoding = errors.New("tcap: invalid EXTERNAL encoding")
-
-	// ErrParameterNotSingleValue reports a parameter or a single-ASN1-type
-	// value that is not exactly one complete BER value, including a missing
-	// result parameter.
-	ErrParameterNotSingleValue = errors.New("tcap: parameter is not one complete BER value")
 )
 
 // Portion names the portion of a TCAP message in which Parse failed.
@@ -145,11 +143,12 @@ type ParseError struct {
 	// included). They are nil otherwise. Repetitions are looked for up to an
 	// element that cannot be decoded. When the message exceeds the decode
 	// limits, an ID is taken from where the message type carries it, without
-	// looking for repetitions, if the message up to the end of that element
-	// stays within the limits: MaxElements counting the message and every
-	// element in it, MaxDepth the levels of nesting from the message, and
-	// MaxWork the octets of its elements. A message whose type is not
-	// recognized then has no IDs.
+	// looking for repetitions, only if it and the elements before it are
+	// valid and within the limits as go-asn1 counts them. An input longer
+	// than MaxWork, a limit that go-asn1 reports without a location, or a
+	// message whose type is not recognized then has no IDs. A message that decoded completely
+	// keeps its IDs when the dialogue PDU inside its EXTERNAL exceeds the
+	// limits.
 	OTID TransactionID
 	DTID TransactionID
 

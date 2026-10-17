@@ -47,11 +47,26 @@
 // first backward Continue) are left to the TCAP stack built on this package.
 //
 // ASN.1 size and value constraints are reported as *ber.ConstraintError from
-// github.com/gomaja/go-asn1/runtime/ber, use errors.As. Other violations are
-// reported with the Err sentinels of this package, use errors.Is. Every error
-// returned by Parse is a *ParseError, which also tells a stack which portion
-// of the message failed and which transaction IDs were derivable, as needed
-// for the abnormal procedures of Q.774 clauses 3.2.2 and 3.3.4.
+// github.com/gomaja/go-asn1/runtime/ber, use errors.As. Malformed BER,
+// including parameter and EXTERNAL single-ASN1-type bytes, is reported with
+// the errors of the codec, such as ber.ErrTruncated or *ber.ElementError.
+// Other violations are reported with the Err sentinels of this package, use
+// errors.Is; Marshal wraps them in a FieldError that names the field. Every
+// error returned by Parse because of the data is a *ParseError, which also
+// tells a stack which portion of the message failed and which transaction IDs
+// were derivable, as needed for the abnormal procedures of Q.774 clauses
+// 3.2.2 and 3.3.4. An invalid ParseOption returns an error wrapping
+// ErrInvalidParseOption instead.
+//
+// The codec checks Invoke IDs. This package checks linked IDs and the invoke
+// IDs of ReturnResult, ReturnError and Reject against -128..127 (ITU-T Q.773
+// (06/97) clauses 3.1 and 4.2.2.2), because the ASN.1 of Q.773 Annex A
+// constrains only the ID of an Invoke. WithConstraintTolerance makes Parse
+// accept and record out-of-range IDs of both kinds; Marshal stays strict.
+//
+// BIT STRING values are encoded as given, and the codec rejects invalid ones.
+// Parse clears the unused bits it receives (ITU-T X.690 (02/2021) clause
+// 8.6.2.2), so a parsed message can be marshalled again.
 //
 // The values of TCAP protocol elements (P-Abort causes, problem codes,
 // associate results and diagnostics, abort sources) are the generated types

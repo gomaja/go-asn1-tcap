@@ -189,8 +189,8 @@ func TestInternalDiagnosticOwnership(t *testing.T) {
 
 func TestInternalConversionCopies(t *testing.T) {
 	parameter := []byte{4, 1, 9}
-	ros := wire.NewROSInvoke(wire.Invoke{InvokeId: wire.NewInvokeIdPresent(big.NewInt(1)), Opcode: wire.NewCodeLocal(big.NewInt(2)), Argument: &runtime.RawValue{Bytes: parameter}})
-	c, err := decodeComponent(wire.NewComponentBasicROS(ros), "Components[0]", nil)
+	ros := wire.NewComponentPortionElemBasicROSBoundInvoke(wire.ComponentPortionElemBasicROSInvokeBound{InvokeId: wire.NewTCInvokeIdSetPresent(1), Opcode: wire.NewCodeLocal(big.NewInt(2)), Argument: &runtime.RawValue{Bytes: parameter}})
+	c, err := decodeComponent(wire.NewComponentPortionElemBoundBasicROS(ros), "Components[0]", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestInternalConversionCopies(t *testing.T) {
 	}
 	ref := big.NewInt(3)
 	descriptor := "description"
-	raw := runtime.External{DirectReference: runtime.ObjectIdentifier{1, 2}, IndirectReference: ref, DataValueDescriptor: &descriptor,
+	raw := runtime.External{DirectReference: runtime.MustObjectIdentifier("1.2"), IndirectReference: ref, DataValueDescriptor: &descriptor,
 		Encoding: runtime.ExternalArbitrary, Arbitrary: runtime.BitString{Bytes: []byte{0x80}, BitLength: 1}}
 	e, err := decodeExternal(raw)
 	if err != nil {

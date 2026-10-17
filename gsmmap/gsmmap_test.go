@@ -19,11 +19,7 @@ var dottedOID = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))+$`)
 
 // dotted formats an object identifier as dotted decimal.
 func dotted(o runtime.ObjectIdentifier) string {
-	parts := make([]string, len(o))
-	for i, a := range o {
-		parts[i] = strconv.FormatUint(a, 10)
-	}
-	return strings.Join(parts, ".")
+	return o.String()
 }
 
 // checkCanonical reports whether s is a canonical OID: dotted decimal without

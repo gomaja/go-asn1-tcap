@@ -232,11 +232,7 @@ func namedValue(v namedInteger) any {
 }
 
 func oidString(oid runtime.ObjectIdentifier) string {
-	parts := make([]string, len(oid))
-	for i, arc := range oid {
-		parts[i] = strconv.FormatUint(arc, 10)
-	}
-	return strings.Join(parts, ".")
+	return oid.String()
 }
 
 func hexOrNil(b []byte) any {
