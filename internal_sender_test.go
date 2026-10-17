@@ -46,7 +46,6 @@ func TestInternalSenderSentinels(t *testing.T) {
 		{"result-code-none", internalBegin(Component{ReturnResultLast: &ReturnResult{Result: &Result{}}}), ErrCodeNoAlternative, "Components[0].ReturnResultLast.Result.OpCode"},
 		{"error-code-none", internalBegin(Component{ReturnError: &ReturnError{}}), ErrCodeNoAlternative, "Components[0].ReturnError.ErrorCode"},
 		{"invalid-code-oid", internalBegin(Component{Invoke: &Invoke{OpCode: GlobalCode("1.40")}}), ErrInvalidOID, "Components[0].Invoke.OpCode"},
-		{"unrepresentable-code-oid", internalBegin(Component{Invoke: &Invoke{OpCode: GlobalCode("2.18446744073709551536")}}), ErrUnrepresentableValue, "Components[0].Invoke.OpCode"},
 		{"problem-none", internalBegin(Component{Reject: &Reject{}}), ErrProblemNoAlternative, "Components[0].Reject.Problem"},
 		{"problem-multiple", internalBegin(Component{Reject: &Reject{Problem: Problem{General: &g, Invoke: &ip}}}), ErrProblemMultipleAlternatives, "Components[0].Reject.Problem"},
 		{"dialogue-none", internalWithDialogue(&Dialogue{}), ErrDialogueNoAlternative, "Dialogue"},
@@ -63,10 +62,10 @@ func TestInternalSenderSentinels(t *testing.T) {
 		{"abort-reasons", &Abort{DTID: TransactionID{1}, Dialogue: NewProviderAbortDialogue(), PAbortCause: &cause}, ErrAbortMultipleReasons, "Dialogue"},
 		{"external-choice", internalWithDialogue(&Dialogue{Opaque: &badExternal}), ErrExternalEncoding, "Dialogue.Opaque"},
 		{"external-oid", internalWithDialogue(&Dialogue{Opaque: &badOID}), ErrInvalidOID, "Dialogue.Opaque.DirectReference"},
-		{"external-single", internalWithDialogue(&Dialogue{Opaque: &badSingle}), ErrParameterNotSingleValue, "Dialogue.Opaque.SingleASN1Type"},
-		{"parameter-empty", internalBegin(Component{Invoke: &Invoke{OpCode: LocalCode(1), Parameter: []byte{}}}), ErrParameterNotSingleValue, "Components[0].Invoke.Parameter"},
-		{"parameter-trailing", internalBegin(Component{ReturnError: &ReturnError{ErrorCode: LocalCode(1), Parameter: []byte{5, 0, 5, 0}}}), ErrParameterNotSingleValue, "Components[0].ReturnError.Parameter"},
-		{"result-missing-parameter", internalBegin(Component{ReturnResultNotLast: &ReturnResult{Result: &Result{OpCode: LocalCode(1)}}}), ErrParameterNotSingleValue, "Components[0].ReturnResultNotLast.Result.Parameter"},
+		{"external-single", internalWithDialogue(&Dialogue{Opaque: &badSingle}), ber.ErrExtraData, ""},
+		{"parameter-empty", internalBegin(Component{Invoke: &Invoke{OpCode: LocalCode(1), Parameter: []byte{}}}), ber.ErrTruncated, ""},
+		{"parameter-trailing", internalBegin(Component{ReturnError: &ReturnError{ErrorCode: LocalCode(1), Parameter: []byte{5, 0, 5, 0}}}), ber.ErrExtraData, ""},
+		{"result-missing-parameter", internalBegin(Component{ReturnResultNotLast: &ReturnResult{Result: &Result{OpCode: LocalCode(1)}}}), ber.ErrTruncated, ""},
 		{"application-context", internalWithDialogue(&Dialogue{Request: &AARQ{ApplicationContextName: "01.2"}}), ErrInvalidOID, "Dialogue.Request.ApplicationContextName"},
 	}
 	for _, test := range tests {
@@ -156,11 +155,11 @@ func TestInternalOID(t *testing.T) {
 		}
 	}
 	for _, s := range []string{"2.18446744073709551536", "1.2.18446744073709551616"} {
-		if _, err := ParseOID(s); !errors.Is(err, ErrUnrepresentableValue) {
+		if got, err := ParseOID(s); err != nil || string(got) != s {
 			t.Fatalf("%s: %v", s, err)
 		}
 	}
-	if _, err := OIDFromArcs(2, math.MaxUint64); !errors.Is(err, ErrUnrepresentableValue) {
+	if got, err := OIDFromArcs(2, math.MaxUint64); err != nil || got != "2.18446744073709551615" {
 		t.Fatal(err)
 	}
 	for _, arcs := range [][]uint64{nil, {1}, {3, 0}, {1, 40}} {
@@ -190,7 +189,7 @@ func TestInternalParameterEndOfContents(t *testing.T) {
 		{ReturnError: &ReturnError{ErrorCode: LocalCode(1), Parameter: []byte{0, 0}}},
 		{ReturnResultLast: &ReturnResult{Result: &Result{OpCode: LocalCode(1), Parameter: []byte{0, 0}}}},
 	} {
-		if _, err := internalBegin(c).Marshal(); !errors.Is(err, ErrParameterNotSingleValue) {
+		if _, err := internalBegin(c).Marshal(); !errors.Is(err, ber.ErrInvalidTag) {
 			t.Fatalf("EOC accepted as a value: %v", err)
 		}
 	}

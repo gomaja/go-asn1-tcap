@@ -73,13 +73,13 @@ func marshalMessage(m Message) ([]byte, error) {
 	// including present-empty and mandatory component portions.
 	switch mt {
 	case MessageTypeBegin:
-		msg = wire.NewTCMessageBegin(wire.Begin{Otid: slices.Clone(otid), DialoguePortion: d, Components: c})
+		msg = wire.NewTCMessageBegin(wire.TCMessageBeginBound{Otid: slices.Clone(otid), DialoguePortion: d, Components: componentsForBegin(c)})
 	case MessageTypeContinue:
-		msg = wire.NewTCMessageContinue(wire.Continue{Otid: slices.Clone(otid), Dtid: slices.Clone(dtid), DialoguePortion: d, Components: c})
+		msg = wire.NewTCMessageContinue(wire.TCMessageContinueBound{Otid: slices.Clone(otid), Dtid: slices.Clone(dtid), DialoguePortion: d, Components: componentsForContinue(c)})
 	case MessageTypeEnd:
-		msg = wire.NewTCMessageEnd(wire.End{Dtid: slices.Clone(dtid), DialoguePortion: d, Components: c})
+		msg = wire.NewTCMessageEnd(wire.TCMessageEndBound{Dtid: slices.Clone(dtid), DialoguePortion: d, Components: componentsForEnd(c)})
 	case MessageTypeUnidirectional:
-		msg = wire.NewTCMessageUnidirectional(wire.Unidirectional{DialoguePortion: d, Components: c})
+		msg = wire.NewTCMessageUnidirectional(wire.TCMessageUnidirectionalBound{DialoguePortion: d, Components: componentsForUnidirectional(c)})
 	case MessageTypeAbort:
 		var reason *wire.AbortReason
 		if cause != nil {
@@ -104,28 +104,25 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 	if cs == nil {
 		return nil, nil
 	}
-	out := &wire.ComponentPortion{Values: make([]wire.Component, len(cs))}
+	out := &wire.ComponentPortion{Values: make([]wire.ComponentPortionElemBound, len(cs))}
 	for i, c := range cs {
 		path := fmt.Sprintf("Components[%d]", i)
 		count := set(c.Invoke != nil) + set(c.ReturnResultLast != nil) + set(c.ReturnResultNotLast != nil) + set(c.ReturnError != nil) + set(c.Reject != nil)
 		if err := alternative(count, ErrComponentNoAlternative, ErrComponentMultipleAlternatives); err != nil {
 			return nil, fieldError(path, err)
 		}
-		var ros wire.ROS
+		var ros wire.ComponentPortionElemBasicROSBound
 		switch {
 		case c.Invoke != nil:
 			v := c.Invoke
 			p := path + ".Invoke"
-			if err := checkEncodeID(v.InvokeID, p+".InvokeID"); err != nil {
-				return nil, err
-			}
-			w := wire.Invoke{InvokeId: wire.NewInvokeIdPresent(big.NewInt(v.InvokeID))}
+			w := wire.ComponentPortionElemBasicROSInvokeBound{InvokeId: wire.NewTCInvokeIdSetPresent(v.InvokeID)}
 			if v.LinkedID != nil {
-				if err := checkEncodeID(*v.LinkedID, p+".LinkedID"); err != nil {
+				if err := checkEncodeComponentID(*v.LinkedID, p+".LinkedID"); err != nil {
 					return nil, err
 				}
 				// Q.773 Table 20: [0] IMPLICIT INTEGER, not an explicit wrapper.
-				l := wire.NewInvokeLinkedIdPresent(big.NewInt(*v.LinkedID))
+				l := wire.NewComponentPortionElemBasicROSInvokeBoundLinkedIdPresent(big.NewInt(*v.LinkedID))
 				w.LinkedId = &l
 			}
 			code, err := encodeCode(v.OpCode, p+".OpCode")
@@ -134,12 +131,9 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 			}
 			w.Opcode = code
 			if v.Parameter != nil {
-				if err := validateParameter(v.Parameter, p+".Parameter"); err != nil {
-					return nil, err
-				}
 				w.Argument = &runtime.RawValue{Bytes: slices.Clone(v.Parameter)}
 			}
-			ros = wire.NewROSInvoke(w)
+			ros = wire.NewComponentPortionElemBasicROSBoundInvoke(w)
 		case c.ReturnResultLast != nil || c.ReturnResultNotLast != nil:
 			v, name := c.ReturnResultLast, ".ReturnResultLast"
 			if v == nil {
@@ -150,13 +144,13 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 				return nil, err
 			}
 			if c.ReturnResultNotLast != nil {
-				out.Values[i] = wire.NewComponentReturnResultNotLast(w)
+				out.Values[i] = wire.NewComponentPortionElemBoundReturnResultNotLast(w)
 				continue
 			}
-			ros = wire.NewROSReturnResult(w)
+			ros = wire.NewComponentPortionElemBasicROSBoundReturnResult(w)
 		case c.ReturnError != nil:
 			v, p := c.ReturnError, path+".ReturnError"
-			if err := checkEncodeID(v.InvokeID, p+".InvokeID"); err != nil {
+			if err := checkEncodeComponentID(v.InvokeID, p+".InvokeID"); err != nil {
 				return nil, err
 			}
 			code, err := encodeCode(v.ErrorCode, p+".ErrorCode")
@@ -165,17 +159,14 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 			}
 			w := wire.ReturnError{InvokeId: wire.NewInvokeIdPresent(big.NewInt(v.InvokeID)), Errcode: code}
 			if v.Parameter != nil {
-				if err := validateParameter(v.Parameter, p+".Parameter"); err != nil {
-					return nil, err
-				}
 				w.Parameter = &runtime.RawValue{Bytes: slices.Clone(v.Parameter)}
 			}
-			ros = wire.NewROSReturnError(w)
+			ros = wire.NewComponentPortionElemBasicROSBoundReturnError(w)
 		case c.Reject != nil:
 			v, p := c.Reject, path+".Reject"
 			id := wire.NewInvokeIdAbsent(struct{}{})
 			if v.InvokeID != nil {
-				if err := checkEncodeID(*v.InvokeID, p+".InvokeID"); err != nil {
+				if err := checkEncodeComponentID(*v.InvokeID, p+".InvokeID"); err != nil {
 					return nil, err
 				}
 				id = wire.NewInvokeIdPresent(big.NewInt(*v.InvokeID))
@@ -184,25 +175,22 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 			if err != nil {
 				return nil, err
 			}
-			ros = wire.NewROSReject(wire.Reject{InvokeId: id, Problem: problem})
+			ros = wire.NewComponentPortionElemBasicROSBoundReject(wire.Reject{InvokeId: id, Problem: problem})
 		}
-		out.Values[i] = wire.NewComponentBasicROS(ros)
+		out.Values[i] = wire.NewComponentPortionElemBoundBasicROS(ros)
 	}
 	return out, nil
 }
 
 // Q.773 Table 16 note b makes both fields mandatory when result is present.
 func encodeResult(v *ReturnResult, path string) (wire.ReturnResult, error) {
-	if err := checkEncodeID(v.InvokeID, path+".InvokeID"); err != nil {
+	if err := checkEncodeComponentID(v.InvokeID, path+".InvokeID"); err != nil {
 		return wire.ReturnResult{}, err
 	}
 	w := wire.ReturnResult{InvokeId: wire.NewInvokeIdPresent(big.NewInt(v.InvokeID))}
 	if v.Result != nil {
 		code, err := encodeCode(v.Result.OpCode, path+".Result.OpCode")
 		if err != nil {
-			return w, err
-		}
-		if err := validateParameter(v.Result.Parameter, path+".Result.Parameter"); err != nil {
 			return w, err
 		}
 		w.Result = &wire.ReturnResultResult{Opcode: code, Result: runtime.RawValue{Bytes: slices.Clone(v.Result.Parameter)}}
@@ -226,7 +214,7 @@ func encodeCode(v Code, path string) (wire.Code, error) {
 	case LocalCode:
 		return wire.NewCodeLocal(big.NewInt(int64(v))), nil
 	case GlobalCode:
-		arcs, err := OID(v).Arcs()
+		arcs, err := parseOID(string(v))
 		if err != nil {
 			return wire.Code{}, fieldError(path, err)
 		}

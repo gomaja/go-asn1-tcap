@@ -21,7 +21,7 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 			if err != nil {
 				return nil, err
 			}
-			if slices.Equal(arcs, wire.DialogueAsId()) || slices.Equal(arcs, wire.UniDialogueAsId()) {
+			if arcs == wire.DialogueAsId() || arcs == wire.UniDialogueAsId() {
 				return nil, fieldError("Dialogue.Opaque.DirectReference", ErrUnexpectedDialoguePDU)
 			}
 		}
@@ -112,7 +112,7 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 }
 
 func encodeOID(v OID, path string) (runtime.ObjectIdentifier, error) {
-	arcs, err := v.Arcs()
+	arcs, err := parseOID(string(v))
 	return arcs, fieldError(path, err)
 }
 
@@ -142,11 +142,6 @@ func encodeExternal(v External, path string) (runtime.External, error) {
 			return w, err
 		}
 		w.DirectReference = arcs
-	}
-	if v.Encoding == runtime.ExternalSingleASN1Type {
-		if err := validateParameter(v.SingleASN1Type, path+".SingleASN1Type"); err != nil {
-			return w, err
-		}
 	}
 	return w, nil
 }

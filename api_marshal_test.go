@@ -87,6 +87,8 @@ type marshalCase struct {
 	is error
 	// constraint requires a *ber.ConstraintError reachable with errors.As.
 	constraint bool
+	// constraintPath, when set, is the exact generated ConstraintError path.
+	constraintPath string
 	// path, when set, is the exact *tcap.FieldError path; pathPrefix is a
 	// prefix of it.
 	path       string
@@ -103,7 +105,7 @@ var fieldSentinels = []error{
 	tcap.ErrDialogueNoAlternative, tcap.ErrDialogueMultipleAlternatives,
 	tcap.ErrUnexpectedDialoguePDU, tcap.ErrUnexpectedDialogueResult, tcap.ErrUnexpectedUserInformation,
 	tcap.ErrUnsupportedProtocolVersion, tcap.ErrAbortMultipleReasons,
-	tcap.ErrExternalEncoding, tcap.ErrParameterNotSingleValue,
+	tcap.ErrExternalEncoding,
 }
 
 func isTCAPSentinel(err error) bool {
@@ -139,6 +141,8 @@ func runMarshalCases(t *testing.T, cases []marshalCase) {
 				var ce *ber.ConstraintError
 				if !errors.As(err, &ce) {
 					t.Errorf("error %v does not wrap *ber.ConstraintError", err)
+				} else if c.constraintPath != "" && ce.Path != c.constraintPath {
+					t.Errorf("ConstraintError.Path = %q, want %q", ce.Path, c.constraintPath)
 				}
 			}
 			var fe *tcap.FieldError
@@ -315,13 +319,13 @@ func TestMarshalComponentIDs(t *testing.T) {
 		return &tcap.End{DTID: tidD, Components: []tcap.Component{{Reject: &tcap.Reject{InvokeID: &id, Problem: tcap.Problem{Invoke: ptr(wire.NewInvokeProblemInt64(1))}}}}}
 	}
 	runMarshalCases(t, []marshalCase{
-		{name: "invoke -129", msg: beginWith(invokeC(-129)), constraint: true, pathPrefix: "Components[0]"},
+		{name: "invoke -129", msg: beginWith(invokeC(-129)), constraint: true, constraintPath: "begin.components.element[0].basicROS.invoke.invokeId.present"},
 		{name: "invoke -128", msg: beginWith(invokeC(-128)), want: corpusHex(t, "begin-invokeid--128")},
 		{name: "invoke -1", msg: beginWith(invokeC(-1)), want: corpusHex(t, "begin-invokeid--1")},
 		{name: "invoke 127", msg: beginWith(invokeC(127)), want: corpusHex(t, "begin-invokeid-127")},
-		{name: "invoke 128", msg: beginWith(invokeC(128)), constraint: true, pathPrefix: "Components[0]"},
-		{name: "invoke max int64", msg: beginWith(invokeC(math.MaxInt64)), constraint: true},
-		{name: "invoke 128 second", msg: beginWith(invokeC(1), invokeC(128)), constraint: true, pathPrefix: "Components[1]"},
+		{name: "invoke 128", msg: beginWith(invokeC(128)), constraint: true, constraintPath: "begin.components.element[0].basicROS.invoke.invokeId.present"},
+		{name: "invoke max int64", msg: beginWith(invokeC(math.MaxInt64)), constraint: true, constraintPath: "begin.components.element[0].basicROS.invoke.invokeId.present"},
+		{name: "invoke 128 second", msg: beginWith(invokeC(1), invokeC(128)), constraint: true, constraintPath: "begin.components.element[1].basicROS.invoke.invokeId.present"},
 		{name: "linked -129", msg: linked(-129), constraint: true},
 		{name: "linked -128", msg: linked(-128), want: "62134804010203046c0ba10902010380018002013c"},
 		{name: "linked 127", msg: linked(127), want: "62134804010203046c0ba10902010380017f02013c"},
@@ -361,8 +365,8 @@ func TestMarshalCodes(t *testing.T) {
 		{name: "global one arc", msg: inv(tcap.GlobalCode("1")), is: tcap.ErrInvalidOID},
 		{name: "global not canonical", msg: inv(tcap.GlobalCode("1.02.3")), is: tcap.ErrInvalidOID},
 		{name: "global second arc 40", msg: &tcap.End{DTID: tidD, Components: []tcap.Component{{ReturnError: &tcap.ReturnError{InvokeID: 1, ErrorCode: tcap.GlobalCode("1.40")}}}}, is: tcap.ErrInvalidOID},
-		{name: "global arc beyond uint64", msg: inv(tcap.GlobalCode("1.2.18446744073709551616")), is: tcap.ErrUnrepresentableValue},
-		{name: "global first subidentifier beyond uint64", msg: inv(tcap.GlobalCode("2.18446744073709551536")), is: tcap.ErrUnrepresentableValue},
+		{name: "global arc beyond uint64", msg: inv(tcap.GlobalCode("1.2.18446744073709551616")), want: "62214804010203046c19a117020101060b2a8280808080808080800030050403010203"},
+		{name: "global first subidentifier beyond uint64", msg: inv(tcap.GlobalCode("2.18446744073709551536")), want: "62204804010203046c18a116020101060a8280808080808080800030050403010203"},
 	})
 }
 
@@ -378,30 +382,29 @@ func TestMarshalParameters(t *testing.T) {
 	rr := func(p []byte) *tcap.End {
 		return &tcap.End{DTID: tidD, Components: []tcap.Component{{ReturnResultLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(45), Parameter: p}}}}}
 	}
-	notSingle := tcap.ErrParameterNotSingleValue
 	runMarshalCases(t, []marshalCase{
 		{name: "invoke nil", msg: inv(nil), want: "62104804010203046c08a10602010102012d"},
 		{name: "invoke primitive", msg: inv(hx("0402aabb")), want: "62144804010203046c0ca10a02010102012d0402aabb"},
-		{name: "invoke empty", msg: inv([]byte{}), is: notSingle, path: "Components[0].Invoke.Parameter"},
-		{name: "invoke two values", msg: inv(hx("0401aa0401bb")), is: notSingle, path: "Components[0].Invoke.Parameter"},
-		{name: "invoke trailing octet", msg: inv(hx("0401aa00")), is: notSingle},
-		{name: "invoke truncated", msg: inv(hx("0402aa")), is: notSingle},
-		{name: "invoke tag only", msg: inv(hx("30")), is: notSingle},
+		{name: "invoke empty", msg: inv([]byte{}), is: ber.ErrTruncated},
+		{name: "invoke two values", msg: inv(hx("0401aa0401bb")), is: ber.ErrExtraData},
+		{name: "invoke trailing octet", msg: inv(hx("0401aa00")), is: ber.ErrExtraData},
+		{name: "invoke truncated", msg: inv(hx("0402aa")), is: ber.ErrTruncated},
+		{name: "invoke tag only", msg: inv(hx("30")), is: ber.ErrTruncated},
 		// X.690 (02/2021) clause 8.1.3.2: a primitive value has a definite length.
-		{name: "invoke indefinite primitive", msg: inv(hx("0480aa0000")), is: notSingle},
-		{name: "invoke indefinite missing end-of-contents", msg: inv(hx("30800403010203")), is: notSingle},
+		{name: "invoke indefinite primitive", msg: inv(hx("0480aa0000")), is: ber.ErrInvalidLength},
+		{name: "invoke indefinite missing end-of-contents", msg: inv(hx("30800403010203")), is: ber.ErrTruncated},
 		// Verbatim: Marshal does not inspect or re-encode the value.
 		{name: "invoke outer length not minimal", msg: inv(hx("3081050403010203")), want: "62184804010203046c10a10e02010102012d3081050403010203"},
 		{name: "invoke inner length not minimal", msg: inv(hx("3006048103010203")), want: "62184804010203046c10a10e02010102012d3006048103010203"},
 		{name: "invoke indefinite constructed", msg: inv(hx("308004030102030000")), want: "62194804010203046c11a10f02010102012d308004030102030000"},
-		{name: "second component", msg: beginWith(invokeC(1), tcap.Component{Invoke: &tcap.Invoke{InvokeID: 2, OpCode: tcap.LocalCode(60), Parameter: hx("0401aa0401bb")}}), is: notSingle, path: "Components[1].Invoke.Parameter"},
+		{name: "second component", msg: beginWith(invokeC(1), tcap.Component{Invoke: &tcap.Invoke{InvokeID: 2, OpCode: tcap.LocalCode(60), Parameter: hx("0401aa0401bb")}}), is: ber.ErrExtraData},
 		{name: "return error nil", msg: re(nil), want: corpusHex(t, "end-error-local-no-parameter")},
-		{name: "return error empty", msg: re([]byte{}), is: notSingle, pathPrefix: "Components[0].ReturnError"},
-		{name: "return error two values", msg: re(hx("05000500")), is: notSingle, pathPrefix: "Components[0].ReturnError"},
-		{name: "result nil", msg: rr(nil), is: notSingle, pathPrefix: "Components[0].ReturnResultLast"},
-		{name: "result empty", msg: rr([]byte{}), is: notSingle},
-		{name: "result trailing octet", msg: rr(hx("30040402aabbff")), is: notSingle},
-		{name: "result not last nil", msg: &tcap.Continue{OTID: tidO, DTID: tidD, Components: []tcap.Component{{ReturnResultNotLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(45)}}}}}, is: notSingle, pathPrefix: "Components[0].ReturnResultNotLast"},
+		{name: "return error empty", msg: re([]byte{}), is: ber.ErrTruncated},
+		{name: "return error two values", msg: re(hx("05000500")), is: ber.ErrExtraData},
+		{name: "result nil", msg: rr(nil), is: ber.ErrTruncated},
+		{name: "result empty", msg: rr([]byte{}), is: ber.ErrTruncated},
+		{name: "result trailing octet", msg: rr(hx("30040402aabbff")), is: ber.ErrExtraData},
+		{name: "result not last nil", msg: &tcap.Continue{OTID: tidO, DTID: tidD, Components: []tcap.Component{{ReturnResultNotLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(45)}}}}}, is: ber.ErrTruncated},
 	})
 }
 
@@ -545,7 +548,7 @@ func TestMarshalDialogueRules(t *testing.T) {
 		// Application context name, contract 3.9 and 3.11.
 		{name: "AARQ ACN empty", msg: beginD(aarqD(pv1(), "", nil)), is: tcap.ErrInvalidOID, pathPrefix: "Dialogue"},
 		{name: "AARQ ACN first arc 3", msg: beginD(aarqD(pv1(), "3.1", nil)), is: tcap.ErrInvalidOID},
-		{name: "AARQ ACN beyond uint64", msg: beginD(aarqD(pv1(), "0.4.18446744073709551616", nil)), is: tcap.ErrUnrepresentableValue},
+		{name: "AARQ ACN beyond uint64", msg: beginD(aarqD(pv1(), "0.4.18446744073709551616", nil)), want: "623b4804010203046b222820060700118605010101a015601380020780a10d060b04828080808080808080006c0fa10d02010102012d30050403010203"},
 		{name: "AARE ACN second arc 40", msg: &tcap.Continue{OTID: tidO, DTID: tidD, Dialogue: &tcap.Dialogue{Response: &tcap.AARE{
 			ApplicationContextName: "0.40", ResultSourceDiagnostic: tcap.ResultSourceDiagnostic{DialogueServiceUser: userNull()},
 		}}}, is: tcap.ErrInvalidOID},
@@ -588,9 +591,9 @@ func TestMarshalExternal(t *testing.T) {
 		{name: "octet-aligned with single set", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("01"), SingleASN1Type: single}), is: tcap.ErrExternalEncoding},
 		{name: "arbitrary with octet-aligned set", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalArbitrary, Arbitrary: runtime.BitString{Bytes: hx("ff"), BitLength: 8}, OctetAligned: hx("01")}), is: tcap.ErrExternalEncoding},
 		{name: "user information encoding zero", msg: userInfo(tcap.External{DirectReference: "1.2.3.4"}), is: tcap.ErrExternalEncoding, pathPrefix: "Dialogue.Request"},
-		{name: "single nil", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type}), is: tcap.ErrParameterNotSingleValue},
-		{name: "single two values", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("05000500")}), is: tcap.ErrParameterNotSingleValue},
-		{name: "single truncated", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("0403aabb")}), is: tcap.ErrParameterNotSingleValue},
+		{name: "single nil", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type}), is: ber.ErrTruncated},
+		{name: "single two values", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("05000500")}), is: ber.ErrExtraData},
+		{name: "single truncated", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("0403aabb")}), is: ber.ErrTruncated},
 		{name: "direct reference invalid", msg: opaque(tcap.External{DirectReference: "1.2.x", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: tcap.ErrInvalidOID},
 		{name: "user information direct reference invalid", msg: userInfo(tcap.External{DirectReference: "7.1", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: tcap.ErrInvalidOID},
 		// X.690 (02/2021) clause 8.18.4 Table 2: an EXTERNAL needs a direct

@@ -20,9 +20,9 @@ func TestInternalReviewF5CloneBits(t *testing.T) {
 	}{
 		{"MaxInt", runtime.BitString{Bytes: []byte{0x80}, BitLength: math.MaxInt}, runtime.BitString{Bytes: []byte{0x80}, BitLength: math.MaxInt}},
 		{"negative", runtime.BitString{Bytes: []byte{0x80}, BitLength: -1}, runtime.BitString{Bytes: []byte{0x80}, BitLength: -1}},
-		{"zero", runtime.BitString{Bytes: []byte{0xff}, BitLength: 0}, runtime.BitString{Bytes: []byte{}, BitLength: 0}},
+		{"zero", runtime.BitString{Bytes: []byte{0xff}, BitLength: 0}, runtime.BitString{Bytes: []byte{0xff}, BitLength: 0}},
 		{"short", runtime.BitString{Bytes: []byte{0xff}, BitLength: 9}, runtime.BitString{Bytes: []byte{0xff}, BitLength: 9}},
-		{"long", runtime.BitString{Bytes: []byte{0xff, 0xff}, BitLength: 1}, runtime.BitString{Bytes: []byte{0x80}, BitLength: 1}},
+		{"long", runtime.BitString{Bytes: []byte{0xff, 0xff}, BitLength: 1}, runtime.BitString{Bytes: []byte{0xff, 0xff}, BitLength: 1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			defer func() {
@@ -133,44 +133,8 @@ func TestInternalReview3ElementLength(t *testing.T) {
 	}
 }
 
-// leadingWithinLimits counts the leading elements of a message as the
-// decoder counts them: the message and every element inside them against
-// MaxElements, the levels from the message against MaxDepth, and their
-// octets against MaxWork.
-func TestInternalReview3LeadingWithinLimits(t *testing.T) {
-	primitive := []byte{0x48, 0x01, 0x01}
-	segmented := []byte{0x68, 0x03, 0x04, 0x01, 0x01}
-	indefinite := []byte{0x68, 0x80, 0x04, 0x01, 0x01, 0x00, 0x00}
-	limits := func(depth, elements, work int) ber.DecodeLimits {
-		return ber.DecodeLimits{MaxDepth: depth, MaxElements: elements, MaxWork: work}
-	}
-	for _, tc := range []struct {
-		name     string
-		elements [][]byte
-		limits   ber.DecodeLimits
-		want     bool
-	}{
-		{"primitive", [][]byte{primitive}, limits(1, 2, 3), true},
-		{"primitive elements", [][]byte{primitive}, limits(1, 1, 3), false},
-		{"primitive work", [][]byte{primitive}, limits(1, 2, 2), false},
-		{"segmented", [][]byte{segmented}, limits(2, 3, 5), true},
-		{"segmented depth", [][]byte{segmented}, limits(1, 3, 5), false},
-		{"segmented elements", [][]byte{segmented}, limits(2, 2, 5), false},
-		{"indefinite", [][]byte{indefinite}, limits(2, 3, 7), true},
-		{"two elements", [][]byte{segmented, primitive}, limits(2, 4, 8), true},
-		{"two elements beyond", [][]byte{segmented, primitive}, limits(2, 3, 8), false},
-		{"truncated", [][]byte{{0x68, 0x05, 0x04, 0x01, 0x01}}, limits(2, 9, 9), false},
-		{"segment past its parent", [][]byte{{0x68, 0x02, 0x04, 0x01, 0x01}}, limits(2, 9, 9), false},
-		{"no end-of-contents", [][]byte{{0x68, 0x80, 0x04, 0x01, 0x01}}, limits(2, 9, 9), false},
-	} {
-		if got := leadingWithinLimits(tc.elements, tc.limits); got != tc.want {
-			t.Errorf("%s: %t, want %t", tc.name, got, tc.want)
-		}
-	}
-}
-
-// transactionIDValue reads a transaction ID as ber.DecodeOctetString reads
-// an OCTET STRING (X.690 (02/2021) clause 8.7), each octet once.
+// transactionIDValue decodes the BER forms of an OCTET STRING with the
+// caller's limits and constraint tolerance (ITU-T X.690 (02/2021) clause 8.7).
 func TestInternalReview3TransactionIDValue(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -196,7 +160,7 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in, _ := hex.DecodeString(tc.in)
-			got, ok := transactionIDValue(in, ber.DefaultDecodeLimits(), -1)
+			got, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithConstraintTolerance(&ber.ViolationLog{})})
 			if ok != tc.ok || ok && hex.EncodeToString(got) != tc.want {
 				t.Fatalf("transactionIDValue(%s) = %x, %t; want %s, %t", tc.in, got, ok, tc.want, tc.ok)
 			}
@@ -215,7 +179,11 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 		{"48050102030405", -1, true},
 	} {
 		in, _ := hex.DecodeString(tc.in)
-		if _, ok := transactionIDValue(in, ber.DefaultDecodeLimits(), tc.maxLen); ok != tc.ok {
+		var opts []ber.DecodeOption
+		if tc.maxLen < 0 {
+			opts = append(opts, ber.WithConstraintTolerance(&ber.ViolationLog{}))
+		}
+		if _, ok := transactionIDValue(in, opts); ok != tc.ok {
 			t.Errorf("transactionIDValue(%s, maxLen %d) ok = %t", tc.in, tc.maxLen, ok)
 		}
 	}
@@ -225,18 +193,25 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 	sizes := make([]int, levels+1)
 	sizes[levels] = 3
 	for i := levels - 1; i >= 0; i-- {
-		sizes[i] = 1 + len(lengthOctetsForTest(sizes[i+1])) + sizes[i+1]
+		sizes[i] = 1 + len(ber.EncodeLength(sizes[i+1])) + sizes[i+1]
 	}
 	segments := make([]byte, 0, sizes[0])
 	for i := range levels {
-		segments = append(append(segments, 0x24), lengthOctetsForTest(sizes[i+1])...)
+		segments = append(append(segments, 0x24), ber.EncodeLength(sizes[i+1])...)
 	}
 	segments = append(segments, 0x04, 0x01, 0x01)
 	segments[0] = 0x68
 	limits := ber.DecodeLimits{MaxDepth: 40001, MaxElements: 40002, MaxWork: len(segments)}
-	if got, ok := transactionIDValue(segments, limits, 4); !ok || hex.EncodeToString(got) != "01" || !leadingWithinLimits([][]byte{segments}, limits) {
-		t.Fatalf("40000 levels: %x, %t", got, ok)
+	// The runtime charges segmented strings at each nesting level:
+	// https://github.com/gomaja/go-asn1/issues/151.
+	if _, ok := transactionIDValue(segments, []ber.DecodeOption{ber.WithDecodeLimits(limits)}); ok {
+		t.Fatal("accepted nested segments beyond the codec's work budget")
 	}
+	limits.MaxWork = math.MaxInt
+	if got, ok := transactionIDValue(segments, []ber.DecodeOption{ber.WithDecodeLimits(limits)}); !ok || hex.EncodeToString(got) != "01" {
+		t.Fatalf("40000 levels with sufficient codec work budget: %x, %t", got, ok)
+	}
+
 	deep := "0401aa"
 	for range 3 {
 		deep = "2480" + deep + "0000"
@@ -247,56 +222,20 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 		limits.MaxDepth = d
 		return limits
 	}
-	if _, ok := transactionIDValue(in, depth(3), -1); ok {
+	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(depth(3)), ber.WithConstraintTolerance(&ber.ViolationLog{})}); ok {
 		t.Fatal("a segment nested deeper than MaxDepth accepted")
 	}
-	if got, ok := transactionIDValue(in, depth(4), -1); !ok || hex.EncodeToString(got) != "aa" {
+	if got, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(depth(4)), ber.WithConstraintTolerance(&ber.ViolationLog{})}); !ok || hex.EncodeToString(got) != "aa" {
 		t.Fatalf("segments within MaxDepth: %x, %t", got, ok)
 	}
 	// The element and its 4 segments are 5 elements.
 	elements := ber.DefaultDecodeLimits()
 	elements.MaxElements = 4
-	if _, ok := transactionIDValue(in, elements, -1); ok {
+	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(elements), ber.WithConstraintTolerance(&ber.ViolationLog{})}); ok {
 		t.Fatal("more segments than MaxElements accepted")
 	}
 	elements.MaxElements = 5
-	if _, ok := transactionIDValue(in, elements, -1); !ok {
+	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(elements), ber.WithConstraintTolerance(&ber.ViolationLog{})}); !ok {
 		t.Fatal("segments within MaxElements rejected")
 	}
-}
-
-// FuzzTransactionIDValue: transactionIDValue never panics and agrees with
-// the value ber.DecodeImplicitOctetStringValue decodes from the same element.
-func FuzzTransactionIDValue(f *testing.F) {
-	for _, s := range []string{"480401020304", "680a0402010204020304", "688004020102040203040000", "6880240804020102040203040000", "68062480040000000000"} {
-		in, _ := hex.DecodeString(s)
-		f.Add(in)
-	}
-	f.Fuzz(func(t *testing.T, element []byte) {
-		got, ok := transactionIDValue(element, ber.DefaultDecodeLimits(), -1)
-		tg, n, value, err := ber.DecodeTLV(element)
-		if err != nil || n != len(element) {
-			if ok {
-				t.Fatalf("%x: accepted %x, but DecodeTLV: %d, %v", element, got, n, err)
-			}
-			return
-		}
-		want, err := ber.DecodeImplicitOctetStringValue(tg.Constructed, value, ber.WithDecodeLimits(ber.DecodeLimits{MaxWork: 1 << 24}))
-		if ok != (err == nil) || ok && !bytes.Equal(got, want) {
-			t.Fatalf("%x: %x, %t; decoder %x, %v", element, got, ok, want, err)
-		}
-	})
-}
-
-// lengthOctetsForTest encodes a definite length in the minimum number of
-// octets (X.690 (02/2021) clause 8.1.3).
-func lengthOctetsForTest(n int) []byte {
-	if n < 0x80 {
-		return []byte{byte(n)}
-	}
-	var octets []byte
-	for ; n > 0; n >>= 8 {
-		octets = append([]byte{byte(n)}, octets...)
-	}
-	return append([]byte{0x80 | byte(len(octets))}, octets...)
 }

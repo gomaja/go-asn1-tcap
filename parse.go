@@ -14,8 +14,9 @@ type ParseOption interface {
 }
 
 type parseConfig struct {
-	violations *ber.ViolationLog
-	limits     *ber.DecodeLimits
+	log      *ber.ViolationLog
+	tolerant bool
+	limits   *ber.DecodeLimits
 }
 
 // WithConstraintTolerance makes Parse accept values outside their ASN.1
@@ -24,6 +25,7 @@ type parseConfig struct {
 // recorded only if Parse succeeds. Encoding errors and the rules for dialogue
 // PDUs still apply, and Marshal stays strict: a message parsed with tolerated
 // violations does not marshal until they are corrected. log must not be nil.
+// If supplied more than once, the last WithConstraintTolerance wins.
 func WithConstraintTolerance(log *ber.ViolationLog) ParseOption {
 	return toleranceParseOption{log}
 }
@@ -42,24 +44,17 @@ func WithDecodeLimits(limits ber.DecodeLimits) ParseOption {
 // error wrapping ErrInvalidParseOption. The returned message does not alias data.
 func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) {
 	config := parseConfig{}
-	tolerance := false
 	for _, opt := range opts {
 		if opt == nil {
 			return nil, fmt.Errorf("%w: nil ParseOption", ErrInvalidParseOption)
 		}
-		if opt, ok := opt.(toleranceParseOption); ok && opt.log == nil {
-			return nil, fmt.Errorf("%w: nil constraint violation log", ErrInvalidParseOption)
-		}
 		opt.applyParseOption(&config)
-		if _, ok := opt.(toleranceParseOption); ok {
-			tolerance = true
-		}
 	}
 	var decodeOpts []ber.DecodeOption
-	limits := ber.DefaultDecodeLimits()
-	if tolerance {
-		decodeOpts = append(decodeOpts, ber.WithConstraintTolerance(config.violations))
+	if config.tolerant {
+		decodeOpts = append(decodeOpts, ber.WithConstraintTolerance(config.log))
 	}
+	limits := ber.DefaultDecodeLimits()
 	if config.limits != nil {
 		decodeOpts = append(decodeOpts, ber.WithDecodeLimits(*config.limits))
 		// The nonzero fields replace the defaults, as in ber.WithDecodeLimits.
@@ -73,10 +68,7 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 			limits.MaxWork = config.limits.MaxWork
 		}
 	}
-	// go-asn1 validates decode options when a decoder starts and exports no
-	// separate check (https://github.com/gomaja/go-asn1/issues/141); decoding
-	// empty content runs it without reading data.
-	if _, err := ber.DecodeSequenceChildren(nil, decodeOpts...); err != nil {
+	if err := ber.ValidateDecodeOptions(decodeOpts...); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidParseOption, err)
 	}
 	if len(data) == 0 {
@@ -101,9 +93,12 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 	m, pe := decodeMessage(&w, decodeOpts)
 	if pe != nil {
 		if errors.Is(pe.Err, ber.ErrResourceLimit) {
-			failure := inspectFailure(data, decodeOpts, true, limits)
-			failure.Err = pe.Err
-			return nil, failure
+			// The complete transaction already decoded within the outer
+			// limits; a dialogue PDU inside opaque octets has its own budget.
+			pe.Portion, pe.ComponentIndex = PortionTransaction, -1
+			pe.InvokeID, pe.Dialogue, pe.Components = nil, nil, nil
+			pe.ComponentType = ""
+			return nil, pe
 		}
 		if pe.ComponentIndex >= 0 {
 			pe.InvokeID, pe.ComponentType = inspectComponent(data, pe.ComponentIndex, decodeOpts)
@@ -115,7 +110,9 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 
 type toleranceParseOption struct{ log *ber.ViolationLog }
 
-func (o toleranceParseOption) applyParseOption(c *parseConfig) { c.violations = o.log }
+func (o toleranceParseOption) applyParseOption(c *parseConfig) {
+	c.log, c.tolerant = o.log, true
+}
 
 type limitsParseOption struct{ limits ber.DecodeLimits }
 

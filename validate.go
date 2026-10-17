@@ -5,7 +5,6 @@ import (
 
 	"github.com/gomaja/go-asn1/runtime"
 	"github.com/gomaja/go-asn1/runtime/ber"
-	"github.com/gomaja/go-asn1/runtime/tag"
 )
 
 func fieldError(path string, err error) error {
@@ -32,9 +31,12 @@ func set(v bool) int {
 	return 0
 }
 
-// ITU-T Q.773 (06/97) clause 4.2.2.2 limits component IDs to one octet.
-// The codec does not propagate TCInvokeIdSet: https://github.com/gomaja/go-asn1/issues/128.
-func checkEncodeID(value int64, path string) error {
+// ITU-T Q.773 (06/97) clause 3.1 defines InvokeIdType ::= INTEGER (-128..127)
+// for every component; clause 4.2.2.2 requires one-octet component IDs.
+// The Annex A binding constrains only Invoke's ID. Linked IDs and the IDs of
+// ReturnResult, ReturnError and Reject need this TCAP check:
+// https://github.com/gomaja/go-asn1/issues/146.
+func checkEncodeComponentID(value int64, path string) error {
 	if value >= -128 && value <= 127 {
 		return nil
 	}
@@ -107,25 +109,4 @@ func onlyVersion1(v *runtime.BitString) bool {
 		}
 	}
 	return true
-}
-
-// Q.773 clause 4.2.2.4 permits exactly one parameter element. Its contents
-// belong to the TC-user and are encoded as given.
-// The codec appends unchecked RawValue bytes: https://github.com/gomaja/go-asn1/issues/131.
-func validateParameter(data []byte, path string) error {
-	t, n, _, err := ber.DecodeEncodedTLV(data)
-	// ITU-T X.690 (02/2021) clause 8.1.5: end-of-contents is a delimiter,
-	// not a parameter value, even though its octets have TLV form.
-	if err != nil || n != len(data) || t.Class == tag.ClassUniversal && t.Number == 0 {
-		return fieldError(path, ErrParameterNotSingleValue)
-	}
-	// X.690 (02/2021) clauses 8.1 and 8.2 require valid BER structure,
-	// including the contents of constructed values and universal tag forms.
-	// The check does not yet cover every universal contents length:
-	// https://github.com/gomaja/go-asn1/issues/140.
-	limits := ber.DecodeLimits{MaxDepth: len(data), MaxElements: len(data), MaxWork: len(data)}
-	if err := ber.ValidateBERElement(data, ber.WithDecodeLimits(limits)); err != nil {
-		return fieldError(path, joinErrors(ErrParameterNotSingleValue, err))
-	}
-	return nil
 }

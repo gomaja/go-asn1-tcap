@@ -190,9 +190,13 @@ to the stack built on this package.
 
 - ASN.1 size and value constraints, such as a transaction ID of 5 octets or an
   invoke ID of 200, are `*ber.ConstraintError` (`errors.As`).
-- Every other rule has an `Err` sentinel (`errors.Is`), for example
-  `tcap.ErrUnexpectedDialoguePDU` or `tcap.ErrParameterNotSingleValue`.
-- `Marshal` reports the offending field in a `*tcap.FieldError`.
+- Malformed BER, including parameter and EXTERNAL single-ASN1-type bytes,
+  returns codec errors such as `ber.ErrExtraData`, `ber.ErrTruncated`,
+  `ber.ErrInvalidTag` or `*ber.ElementError`.
+- TCAP rules have an `Err` sentinel (`errors.Is`), for example
+  `tcap.ErrUnexpectedDialoguePDU`.
+- `Marshal` reports rules checked here in a `*tcap.FieldError`. Codec errors
+  retain their generated ASN.1 paths and causes, including `*ber.ConstraintError`.
 - Every `Parse` error caused by the data is a `*tcap.ParseError` that tells a
   TCAP stack how to react, as required by Q.774: the message type, the
   transaction IDs that could be derived from where the message type carries
@@ -229,6 +233,27 @@ if errors.As(err, &perr) {
 `tcap.WithConstraintTolerance` makes `Parse` accept values outside their
 ASN.1 constraints and record them in a `ber.ViolationLog`, for monitoring
 traffic that does not conform. `Marshal` stays strict.
+
+The codec checks Invoke IDs. This package checks linked IDs and the invoke
+IDs of ReturnResult, ReturnError and Reject against −128..127 (ITU-T Q.773
+(06/97) clauses 3.1 and 4.2.2.2), because the ASN.1 of Q.773 Annex A
+constrains only the ID of an Invoke. `tcap.WithConstraintTolerance` makes
+`Parse` accept and record out-of-range IDs of both kinds.
+
+`OID` is a string type, so application context names can be constants.
+`ParseOID` and `Marshal` validate OIDs with go-asn1, which accepts arcs of
+any size; `OID.Arcs()` returns `tcap.ErrUnrepresentableValue` for an arc that
+does not fit in a `uint64`. BIT STRING values are encoded as given, and the
+codec rejects invalid ones. `Parse` clears the unused bits it receives
+(ITU-T X.690 (02/2021) clause 8.6.2.2), so a parsed message can be
+marshalled again.
+
+When `Parse` fails on a decode limit, a transaction ID is derived only if it
+and the elements before it are valid and within the limits as go-asn1 counts
+them; go-asn1 locates the limit with a `ber.ElementError`. An input longer
+than `MaxWork`, or a limit that go-asn1 reports without a location, yields no
+IDs. A message that decoded completely keeps its IDs when the dialogue PDU
+inside its EXTERNAL exceeds the limits.
 
 ### Subpackages
 

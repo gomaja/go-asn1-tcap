@@ -144,10 +144,15 @@ func TestReviewF3ResourceLimitsAndEmptyContext(t *testing.T) {
 	}
 	t.Run("inspection scan limits", func(t *testing.T) {
 		// The OTID is the first child, within the scanned prefix, so it stays
-		// derivable for the P-Abort of Q.774 (06/97) Table 7.
+		// derivable for the P-Abort of Q.774 (06/97) Table 7. go-asn1 locates
+		// a MaxWork failure at the root, which leaves none: https://github.com/gomaja/go-asn1/issues/155.
 		for _, limits := range []ber.DecodeLimits{{MaxWork: 8}, {MaxElements: 2}} {
 			pe := reviewFailure(t, "62074801014f004e00", tcap.WithDecodeLimits(limits))
-			if !errors.Is(pe, ber.ErrResourceLimit) || pe.Portion != tcap.PortionTransaction || pe.ComponentIndex != -1 || pe.OTID.String() != "01" || pe.DTID != nil || pe.Dialogue != nil || pe.Components != nil || pe.InvokeID != nil {
+			wantID := "01"
+			if limits.MaxWork != 0 {
+				wantID = ""
+			}
+			if !errors.Is(pe, ber.ErrResourceLimit) || pe.Portion != tcap.PortionTransaction || pe.ComponentIndex != -1 || pe.OTID.String() != wantID || pe.DTID != nil || pe.Dialogue != nil || pe.Components != nil || pe.InvokeID != nil {
 				t.Fatalf("limited immediate scan = %+v, IDs = %s/%s", pe, pe.OTID, pe.DTID)
 			}
 		}
@@ -156,7 +161,7 @@ func TestReviewF3ResourceLimitsAndEmptyContext(t *testing.T) {
 
 func TestReviewF4OpaqueKnownAbstractSyntax(t *testing.T) {
 	for _, arcs := range []runtime.ObjectIdentifier{wire.DialogueAsId(), wire.UniDialogueAsId()} {
-		oid, err := tcap.OIDFromArcs(arcs...)
+		oid, err := tcap.ParseOID(arcs.String())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -200,10 +205,10 @@ func TestReviewF5BitStringBoundaries(t *testing.T) {
 	}{
 		{"MaxInt", runtime.BitString{Bytes: []byte{0x80}, BitLength: math.MaxInt}, false, runtime.BitString{}},
 		{"negative", runtime.BitString{Bytes: []byte{0x80}, BitLength: -1}, false, runtime.BitString{}},
-		{"zero", runtime.BitString{Bytes: []byte{0xff}, BitLength: 0}, true, runtime.BitString{Bytes: []byte{}, BitLength: 0}},
+		{"zero", runtime.BitString{Bytes: []byte{0xff}, BitLength: 0}, false, runtime.BitString{}},
 		{"short", runtime.BitString{Bytes: []byte{0x80}, BitLength: 9}, false, runtime.BitString{}},
 		{"exact", runtime.BitString{Bytes: []byte{0xff}, BitLength: 1}, true, runtime.BitString{Bytes: []byte{0x80}, BitLength: 1}},
-		{"long", runtime.BitString{Bytes: []byte{0xff, 0xff}, BitLength: 1}, true, runtime.BitString{Bytes: []byte{0x80}, BitLength: 1}},
+		{"long", runtime.BitString{Bytes: []byte{0xff, 0xff}, BitLength: 1}, false, runtime.BitString{}},
 	} {
 		for _, kind := range []string{"protocol-version", "arbitrary"} {
 			t.Run(tc.name+"/"+kind, func(t *testing.T) {
@@ -221,7 +226,7 @@ func TestReviewF5BitStringBoundaries(t *testing.T) {
 					}
 				}()
 				data, err := m.Marshal()
-				valid := tc.valid && (kind != "protocol-version" || tc.bits.BitLength != 0)
+				valid := tc.valid && (kind != "protocol-version" || tc.bits.BitLength != 0) && (kind != "arbitrary" || tc.name != "exact")
 				if (err == nil) != valid {
 					t.Fatalf("Marshal = %x, %v; valid = %t", data, err, valid)
 				}
@@ -303,8 +308,8 @@ func TestReviewF6ParameterBERStructure(t *testing.T) {
 					if err != nil || !reflect.DeepEqual(m, back) {
 						t.Fatalf("round trip = %v, %v", back, err)
 					}
-				} else if !errors.Is(err, tcap.ErrParameterNotSingleValue) {
-					t.Fatalf("Marshal = %x, %v; want ErrParameterNotSingleValue", out, err)
+				} else if expected := ber.ValidateBEREncodedElement(data); expected == nil || err == nil || !sameElementFailure(err, expected) {
+					t.Fatalf("Marshal = %x, %v; want codec BER element failure", out, err)
 				}
 			})
 		}
@@ -382,6 +387,17 @@ func TestReviewF11SingleLineParseErrors(t *testing.T) {
 	}
 }
 
+// Q.774 (06/97) Table 7 distinguishes an unrecognized message type from a
+// badly formatted transaction portion, also when the message is truncated.
+func TestParseKeepsUnrecognizedTypeWhenTruncated(t *testing.T) {
+	for _, input := range []string{"6305480101", "638048010100"} {
+		pe := reviewFailure(t, input)
+		if !errors.Is(pe, tcap.ErrUnrecognizedMessageType) || !errors.Is(pe, ber.ErrTruncated) || pe.OTID.String() != "01" {
+			t.Fatalf("%s: %v, OTID %s", input, pe, pe.OTID)
+		}
+	}
+}
+
 func TestReviewF12FailingComponentType(t *testing.T) {
 	for _, tc := range []struct {
 		tag  string
@@ -426,4 +442,21 @@ func reviewComponentType(t *testing.T, pe *tcap.ParseError, want tcap.ComponentT
 	if pe.ComponentType != want {
 		t.Fatalf("ComponentType = %q; want %q, error = %v", pe.ComponentType, want, pe)
 	}
+}
+
+// Compare the location and cause that the codec exposes for open-type bytes.
+func sameElementFailure(got, want error) bool {
+	var g, w *ber.ElementError
+	if !errors.As(got, &g) || !errors.As(want, &w) {
+		return false
+	}
+	if g.Offset() != w.Offset() || !reflect.DeepEqual(g.ChildIndexes(), w.ChildIndexes()) {
+		return false
+	}
+	for _, cause := range []error{ber.ErrInvalidTag, ber.ErrInvalidLength, ber.ErrInvalidValue, ber.ErrExtraData, ber.ErrTruncated} {
+		if errors.Is(want, cause) {
+			return errors.Is(got, cause)
+		}
+	}
+	return false
 }

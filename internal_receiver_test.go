@@ -23,7 +23,7 @@ func internalRawBegin(components ...[]byte) []byte {
 	return internalTLV(0x62, internalTLV(0x48, []byte{1}), internalTLV(0x6c, components...))
 }
 
-func internalDialogueBytes(t *testing.T, pdu []byte, encoding runtime.ExternalEncoding, asid []uint64) []byte {
+func internalDialogueBytes(t *testing.T, pdu []byte, encoding runtime.ExternalEncoding, asid runtime.ObjectIdentifier) []byte {
 	t.Helper()
 	id, err := ber.EncodeObjectIdentifier(asid)
 	if err != nil {
@@ -58,12 +58,12 @@ func TestInternalReceiverRules(t *testing.T) {
 		data []byte
 		want error
 	}{
-		{"invoke-null", internalRawBegin(internalTLV(0xa1, []byte{5, 0}, code)), ErrMissingInvokeID},
+		{"invoke-null", internalRawBegin(internalTLV(0xa1, []byte{5, 0}, code)), nil},
 		{"result-last-null", internalRawBegin(internalTLV(0xa2, []byte{5, 0})), ErrMissingInvokeID},
 		{"result-not-last-null", internalRawBegin(internalTLV(0xa7, []byte{5, 0})), ErrMissingInvokeID},
 		{"error-null", internalRawBegin(internalTLV(0xa3, []byte{5, 0}, code)), ErrMissingInvokeID},
 		{"linked-null", internalRawBegin(internalTLV(0xa1, id, []byte{0x81, 0}, code)), ErrInvalidLinkedID},
-		{"invoke-overflow", internalRawBegin(internalTLV(0xa1, large, code)), ErrUnrepresentableValue},
+		{"invoke-overflow", internalRawBegin(internalTLV(0xa1, large, code)), ber.ErrInvalidValue},
 		{"linked-overflow", internalRawBegin(internalTLV(0xa1, id, internalTLV(0x80, large[2:]), code)), ErrUnrepresentableValue},
 		{"code-overflow", internalRawBegin(internalTLV(0xa1, id, large)), ErrUnrepresentableValue},
 		{"result-code-overflow", internalRawBegin(internalTLV(0xa2, id, internalTLV(0x30, large, []byte{5, 0}))), ErrUnrepresentableValue},
@@ -74,7 +74,12 @@ func TestInternalReceiverRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse(tc.data)
 			var pe *ParseError
-			if !errors.As(err, &pe) || !errors.Is(err, tc.want) || pe.Portion != PortionComponent || pe.ComponentIndex != 0 {
+			var ce *ber.ConstraintError
+			wantCause := errors.Is(err, tc.want)
+			if tc.want == nil {
+				wantCause = errors.As(err, &ce)
+			}
+			if !errors.As(err, &pe) || !wantCause || pe.Portion != PortionComponent || pe.ComponentIndex != 0 {
 				t.Fatalf("%v", err)
 			}
 			if bytes.Contains([]byte(tc.name), []byte("overflow")) && (tc.name == "invoke-overflow" || tc.name == "reject-overflow") && pe.InvokeID != nil {

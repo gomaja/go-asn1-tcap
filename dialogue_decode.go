@@ -17,8 +17,8 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeO
 		return nil, nil
 	}
 	e := runtime.External(*dp)
-	structured := slices.Equal(e.DirectReference, wire.DialogueAsId())
-	uni := slices.Equal(e.DirectReference, wire.UniDialogueAsId())
+	structured := e.DirectReference == wire.DialogueAsId()
+	uni := e.DirectReference == wire.UniDialogueAsId()
 	if !structured && !uni {
 		x, err := decodeExternal(e)
 		if err != nil {
@@ -46,7 +46,7 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeO
 			return nil, err
 		}
 		w := p.UnidialoguePDU
-		acn, err := OIDFromArcs(w.ApplicationContextName...)
+		acn, err := decodeOID(w.ApplicationContextName)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeO
 		switch {
 		case p.DialogueRequest != nil:
 			w := p.DialogueRequest
-			acn, err := OIDFromArcs(w.ApplicationContextName...)
+			acn, err := decodeOID(w.ApplicationContextName)
 			if err != nil {
 				return nil, err
 			}
@@ -82,7 +82,7 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeO
 			d.Request = v
 		case p.DialogueResponse != nil:
 			w := p.DialogueResponse
-			acn, err := OIDFromArcs(w.ApplicationContextName...)
+			acn, err := decodeOID(w.ApplicationContextName)
 			if err != nil {
 				return nil, err
 			}
@@ -137,8 +137,8 @@ func externalData(e runtime.External) ([]byte, error) {
 func decodeExternal(e runtime.External) (External, error) {
 	v := External{IndirectReference: cloneBigInt(e.IndirectReference), DataValueDescriptor: clonePointer(e.DataValueDescriptor), Encoding: e.Encoding,
 		SingleASN1Type: slices.Clone(e.SingleASN1Type.Bytes), OctetAligned: slices.Clone(e.OctetAligned), Arbitrary: cloneBits(e.Arbitrary)}
-	if e.DirectReference != nil {
-		oid, err := OIDFromArcs(e.DirectReference...)
+	if !e.DirectReference.IsZero() {
+		oid, err := decodeOID(e.DirectReference)
 		if err != nil {
 			return v, err
 		}

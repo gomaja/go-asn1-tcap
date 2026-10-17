@@ -33,6 +33,8 @@ var validOIDs = []struct {
 	{"1.2.18446744073709551615", []uint64{1, 2, math.MaxUint64}},
 	// 2*40 + 18446744073709551535 = 2^64 - 1.
 	{"2.18446744073709551535", []uint64{2, math.MaxUint64 - 80}},
+	{"2.18446744073709551536", []uint64{2, math.MaxUint64 - 79}},
+	{"2.18446744073709551615", []uint64{2, math.MaxUint64}},
 }
 
 var invalidOIDs = []string{
@@ -44,7 +46,7 @@ var invalidOIDs = []string{
 	"1.2.3.", "1:2",
 }
 
-var unrepresentableOIDs = []string{
+var wideOIDs = []string{
 	"1.2.18446744073709551616",
 	"1.2.99999999999999999999999",
 	"0.4.0.18446744073709551616.1",
@@ -66,9 +68,9 @@ func TestParseOID(t *testing.T) {
 			t.Errorf("ParseOID(%q) = %q, %v; want ErrInvalidOID", s, got, err)
 		}
 	}
-	for _, s := range unrepresentableOIDs {
-		if got, err := tcap.ParseOID(s); !errors.Is(err, tcap.ErrUnrepresentableValue) {
-			t.Errorf("ParseOID(%q) = %q, %v; want ErrUnrepresentableValue", s, got, err)
+	for _, s := range wideOIDs {
+		if got, err := tcap.ParseOID(s); err != nil || string(got) != s {
+			t.Errorf("ParseOID(%q) = %q, %v; want the unchanged valid OID", s, got, err)
 		}
 	}
 }
@@ -85,7 +87,7 @@ func TestOIDArcs(t *testing.T) {
 			t.Errorf("OID(%q).Arcs() error = %v; want ErrInvalidOID", s, err)
 		}
 	}
-	for _, s := range unrepresentableOIDs {
+	for _, s := range []string{wideOIDs[0], wideOIDs[1], wideOIDs[2], wideOIDs[5]} {
 		if _, err := tcap.OID(s).Arcs(); !errors.Is(err, tcap.ErrUnrepresentableValue) {
 			t.Errorf("OID(%q).Arcs() error = %v; want ErrUnrepresentableValue", s, err)
 		}
@@ -114,10 +116,10 @@ func TestOIDFromArcs(t *testing.T) {
 			t.Errorf("OIDFromArcs(%v) = %q, %v; want ErrInvalidOID", arcs, got, err)
 		}
 	}
-	unrepresentable := [][]uint64{{2, math.MaxUint64 - 79}, {2, math.MaxUint64}, {2, math.MaxUint64, 1}}
-	for _, arcs := range unrepresentable {
-		if got, err := tcap.OIDFromArcs(arcs...); !errors.Is(err, tcap.ErrUnrepresentableValue) {
-			t.Errorf("OIDFromArcs(%v) = %q, %v; want ErrUnrepresentableValue", arcs, got, err)
+	combinedWide := [][]uint64{{2, math.MaxUint64 - 79}, {2, math.MaxUint64}, {2, math.MaxUint64, 1}}
+	for _, arcs := range combinedWide {
+		if got, err := tcap.OIDFromArcs(arcs...); err != nil {
+			t.Errorf("OIDFromArcs(%v) = %q, %v; want success", arcs, got, err)
 		}
 	}
 }

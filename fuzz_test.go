@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gomaja/go-asn1/runtime"
 	"github.com/gomaja/go-asn1/runtime/ber"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
@@ -169,9 +170,8 @@ func addParseSeeds(f *testing.F) {
 	}
 }
 
-// FuzzOID: ParseOID never panics, reports only its two errors, and an
-// accepted OID is exactly its input, follows the rules of oid.go and
-// round-trips through Arcs and OIDFromArcs.
+// FuzzOID exercises this package's OID/error and uint64-view boundaries.
+// Wide valid OIDs round-trip through a TCAP global code as well.
 func FuzzOID(f *testing.F) {
 	for _, c := range validOIDs {
 		f.Add(c.s)
@@ -179,18 +179,14 @@ func FuzzOID(f *testing.F) {
 	for _, s := range invalidOIDs {
 		f.Add(s)
 	}
-	for _, s := range unrepresentableOIDs {
+	for _, s := range wideOIDs {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
 		oid, err := tcap.ParseOID(s)
 		if err != nil {
-			invalid, unrepresentable := errors.Is(err, tcap.ErrInvalidOID), errors.Is(err, tcap.ErrUnrepresentableValue)
-			if invalid == unrepresentable {
-				t.Fatalf("ParseOID(%q) error %v: want exactly one of ErrInvalidOID, ErrUnrepresentableValue", s, err)
-			}
-			if _, err2 := tcap.OID(s).Arcs(); errors.Is(err2, tcap.ErrInvalidOID) != invalid || errors.Is(err2, tcap.ErrUnrepresentableValue) != unrepresentable {
-				t.Fatalf("OID(%q).Arcs() error %v differs from ParseOID error %v", s, err2, err)
+			if !errors.Is(err, tcap.ErrInvalidOID) && !errors.Is(err, runtime.ErrOIDTextLimit) {
+				t.Fatalf("ParseOID(%q): %v", s, err)
 			}
 			return
 		}
@@ -198,15 +194,22 @@ func FuzzOID(f *testing.F) {
 			t.Fatalf("ParseOID(%q) = %q", s, oid)
 		}
 		arcs, err := oid.Arcs()
+		if err == nil {
+			back, err := tcap.OIDFromArcs(arcs...)
+			if err != nil || back != oid {
+				t.Fatalf("arcs round trip: %q, %v", back, err)
+			}
+		} else if !errors.Is(err, tcap.ErrUnrepresentableValue) {
+			t.Fatal(err)
+		}
+		m := &tcap.Begin{OTID: tcap.TransactionID{1}, Components: []tcap.Component{{Invoke: &tcap.Invoke{InvokeID: 1, OpCode: tcap.GlobalCode(oid)}}}}
+		out, err := m.Marshal()
 		if err != nil {
-			t.Fatalf("Arcs(%q): %v", s, err)
+			t.Fatal(err)
 		}
-		if len(arcs) < 2 || arcs[0] > 2 || (arcs[0] < 2 && arcs[1] > 39) || (arcs[0] == 2 && arcs[1] > ^uint64(0)-80) {
-			t.Fatalf("ParseOID accepted %q with arcs %v", s, arcs)
-		}
-		back, err := tcap.OIDFromArcs(arcs...)
-		if err != nil || back != oid {
-			t.Fatalf("OIDFromArcs(%v) = %q, %v; want %q", arcs, back, err, oid)
+		back, err := tcap.Parse(out)
+		if err != nil || back.(*tcap.Begin).Components[0].Invoke.OpCode != tcap.GlobalCode(oid) {
+			t.Fatalf("global OID round trip: %v, %v", back, err)
 		}
 	})
 }

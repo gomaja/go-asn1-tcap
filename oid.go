@@ -1,81 +1,68 @@
 package tcap
 
 import (
-	"math"
-	"strconv"
-	"strings"
+	"errors"
+	"fmt"
+
+	"github.com/gomaja/go-asn1/runtime"
 )
 
 // OID is an OBJECT IDENTIFIER in canonical dotted-decimal form, for example
-// "0.4.0.0.1.0.20.3": decimal arcs without signs, spaces or leading zeros,
-// separated by single dots. OIDs are comparable with == and can be declared
-// as constants. A valid OID has at least two arcs, a first arc of 0, 1 or 2,
-// and a second arc of at most 39 when the first arc is 0 or 1 (ITU-T X.690
-// (02/2021) clause 8.19.4).
-//
-// A conversion such as OID(s) does not validate s; Marshal validates every
-// OID it encodes.
+// "0.4.0.0.1.0.20.3". OIDs compare with == and can be constants. Conversion
+// with OID(s) does not validate s; Marshal validates every OID it encodes.
+// Arcs have no fixed width (ITU-T X.690 (02/2021) clause 8.19).
 type OID string
 
-// ParseOID validates s and returns it as an OID. It returns ErrInvalidOID if
-// s is not a valid OID in canonical form, and ErrUnrepresentableValue if an
-// arc does not fit in 64 bits.
+// ParseOID returns s as an OID after validation by runtime.ParseObjectIdentifier.
+// Malformed input wraps ErrInvalidOID; decimal conversion limits return
+// runtime.ErrOIDTextLimit. Arcs larger than uint64 are valid.
 func ParseOID(s string) (OID, error) {
-	if _, err := OID(s).Arcs(); err != nil {
+	if _, err := parseOID(s); err != nil {
 		return "", err
 	}
 	return OID(s), nil
 }
 
-// OIDFromArcs returns the OID with the given arcs. It returns ErrInvalidOID
-// if the arcs do not form a valid OID, and ErrUnrepresentableValue if the
-// first two arcs do not fit in one 64-bit subidentifier.
+// OIDFromArcs returns the canonical OID with the given uint64 arcs. Invalid
+// root arcs wrap ErrInvalidOID. Combining the first two arcs does not impose
+// a uint64 limit (ITU-T X.690 (02/2021) clause 8.19.4).
+// Decimal conversion limits return runtime.ErrOIDTextLimit.
 func OIDFromArcs(arcs ...uint64) (OID, error) {
-	if err := validateArcs(arcs); err != nil {
-		return "", err
+	v, err := runtime.ObjectIdentifierFromArcs(arcs...)
+	if err != nil {
+		return "", oidError(err)
 	}
-	parts := make([]string, len(arcs))
-	for i, arc := range arcs {
-		parts[i] = strconv.FormatUint(arc, 10)
-	}
-	return OID(strings.Join(parts, ".")), nil
+	return decodeOID(v)
 }
 
-// Arcs returns the arcs of the OID. It returns the errors of ParseOID.
+// Arcs returns an owned uint64 view. Malformed input wraps ErrInvalidOID;
+// decimal conversion limits return runtime.ErrOIDTextLimit. A valid OID with
+// an arc larger than uint64 returns ErrUnrepresentableValue.
 func (o OID) Arcs() ([]uint64, error) {
-	parts := strings.Split(string(o), ".")
-	if len(parts) < 2 {
-		return nil, ErrInvalidOID
-	}
-	arcs := make([]uint64, len(parts))
-	for i, part := range parts {
-		if part == "" || len(part) > 1 && part[0] == '0' {
-			return nil, ErrInvalidOID
-		}
-		for _, c := range part {
-			if c < '0' || c > '9' {
-				return nil, ErrInvalidOID
-			}
-		}
-		arc, err := strconv.ParseUint(part, 10, 64)
-		if err != nil {
-			return nil, ErrUnrepresentableValue
-		}
-		arcs[i] = arc
-	}
-	if err := validateArcs(arcs); err != nil {
+	v, err := parseOID(string(o))
+	if err != nil {
 		return nil, err
+	}
+	arcs, ok := v.Arcs()
+	if !ok {
+		return nil, ErrUnrepresentableValue
 	}
 	return arcs, nil
 }
 
-// ITU-T X.690 (02/2021) clause 8.19.4 combines the first two arcs.
-func validateArcs(arcs []uint64) error {
-	if len(arcs) < 2 || arcs[0] > 2 || arcs[0] < 2 && arcs[1] > 39 {
-		return ErrInvalidOID
+func parseOID(s string) (runtime.ObjectIdentifier, error) {
+	v, err := runtime.ParseObjectIdentifier(s)
+	return v, oidError(err)
+}
+
+func oidError(err error) error {
+	if errors.Is(err, runtime.ErrInvalidOID) {
+		return fmt.Errorf("%w: %w", ErrInvalidOID, err)
 	}
-	if arcs[1] > math.MaxUint64-arcs[0]*40 {
-		return ErrUnrepresentableValue
-	}
-	return nil
+	return err
+}
+
+func decodeOID(v runtime.ObjectIdentifier) (OID, error) {
+	s, err := v.StringChecked()
+	return OID(s), oidError(err)
 }
