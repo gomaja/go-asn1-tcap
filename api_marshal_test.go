@@ -123,7 +123,6 @@ func runMarshalCases(t *testing.T, cases []marshalCase) {
 		t.Run(c.name, func(t *testing.T) {
 			out, err := c.msg.Marshal()
 			if c.want != "" {
-				c.want = freshEncodingHex(c.want)
 				if err != nil {
 					t.Fatalf("Marshal: %v", err)
 				}
@@ -176,9 +175,9 @@ func TestMarshalNilReceivers(t *testing.T) {
 }
 
 // TestMarshalCorpusEquivalents builds the corpus values by hand and checks
-// their encodings, with DEFAULT protocol-version omitted: https://github.com/gomaja/go-asn1/issues/164.
+// their exact encodings.
 func TestMarshalCorpusEquivalents(t *testing.T) {
-	c := func(id string) string { return marshalCorpusHex(t, id) }
+	c := func(id string) string { return corpusHex(t, id) }
 	runMarshalCases(t, []marshalCase{
 		{name: "begin-otid-1", msg: &tcap.Begin{OTID: tcap.TransactionID{1}, Components: []tcap.Component{invokeC(1)}}, want: c("begin-otid-1")},
 		{name: "begin-otid-4", msg: beginWith(invokeC(1)), want: c("begin-otid-4")},
@@ -442,19 +441,19 @@ func TestMarshalDialoguePlacement(t *testing.T) {
 		hex  func(abort bool) string
 	}
 	alts := []alt{
-		{"Request", func(bool) *tcap.Dialogue { return aarqD(pv1(), acn3, nil) }, func(bool) string { return dialoguePortion(hexDialogueAS, hexAARQDefault) }},
+		{"Request", func(bool) *tcap.Dialogue { return aarqD(pv1(), acn3, nil) }, func(bool) string { return dialoguePortion(hexDialogueAS, hexAARQ) }},
 		{"Response", func(abort bool) *tcap.Dialogue { return aareD(pv1(), !abort) }, func(abort bool) string {
 			if abort {
-				return dialoguePortion(hexDialogueAS, hexAARERejDefault)
+				return dialoguePortion(hexDialogueAS, hexAARERej)
 			}
-			return dialoguePortion(hexDialogueAS, hexAAREAccDefault)
+			return dialoguePortion(hexDialogueAS, hexAAREAcc)
 		}},
 		{"Abort", func(bool) *tcap.Dialogue { return abrtUserD(nil) }, func(bool) string { return dialoguePortion(hexDialogueAS, hexABRTUser) }},
-		{"Unidirectional", func(bool) *tcap.Dialogue { return audtD(pv1(), acn3) }, func(bool) string { return dialoguePortion(hexUniAS, hexAUDTDefault) }},
+		{"Unidirectional", func(bool) *tcap.Dialogue { return audtD(pv1(), acn3) }, func(bool) string { return dialoguePortion(hexUniAS, hexAUDT) }},
 		{"Opaque", func(bool) *tcap.Dialogue { return &tcap.Dialogue{Opaque: opaqueE()} }, func(bool) string { return tlv("6b", hexOpaqueExt) }},
 	}
 	allowed := map[string]map[string]bool{
-		"Begin":          {"Request": true, "Opaque": true},
+		"Begin":          {"Request": true},
 		"Continue":       {"Response": true, "Opaque": true},
 		"End":            {"Response": true, "Opaque": true},
 		"Abort":          {"Response": true, "Abort": true, "Opaque": true},
@@ -485,7 +484,7 @@ func TestMarshalDialoguePlacement(t *testing.T) {
 			c := marshalCase{name: mt + "/" + a.name, msg: msg}
 			if allowed[mt][a.name] {
 				c.want = want
-			} else if mt == "Unidirectional" && a.name == "Opaque" {
+			} else if (mt == "Begin" || mt == "Unidirectional") && a.name == "Opaque" {
 				c.constraint = true
 			} else {
 				c.is = tcap.ErrUnexpectedDialoguePDU
@@ -531,18 +530,18 @@ func TestMarshalDialogueRules(t *testing.T) {
 			DialogueServiceProvider: ptr(wire.AssociateSourceDiagnosticDialogueServiceProviderValueNullValue()),
 		}), is: tcap.ErrResultSourceDiagnosticMultipleAlternatives, path: "Dialogue.Response.ResultSourceDiagnostic"},
 		{name: "RSD provider no reason", msg: rsd(tcap.ResultSourceDiagnostic{DialogueServiceProvider: ptr(wire.AssociateSourceDiagnosticDialogueServiceProviderValueNoReasonGivenValue())}),
-			want: tlv("65", hexOTID, hexDTID, dialoguePortion(hexDialogueAS, tlv("61", hexACN3, "a203020100", "a305a203020101")))},
+			want: tlv("65", hexOTID, hexDTID, dialoguePortion(hexDialogueAS, tlv("61", hexPV1, hexACN3, "a203020100", "a305a203020101")))},
 
 		// Protocol version, Q.774 clause 3.2.3.
 		{name: "AARQ version1 and bit 1", msg: beginD(aarqD(pv("c0", 2), acn3, nil)), want: "62374804010203046b1e281c060700118605010101a011600f800206c0a1090607040000010014036c0fa10d02010102012d30050403010203"},
-		{name: "AARQ version1 with trailing zero bits", msg: beginD(aarqD(pv("80", 8), acn3, nil)), want: "62334804010203046b1a2818060700118605010101a00d600ba1090607040000010014036c0fa10d02010102012d30050403010203"},
+		{name: "AARQ version1 with trailing zero bits", msg: beginD(aarqD(pv("80", 8), acn3, nil)), want: "62374804010203046b1e281c060700118605010101a011600f80020080a1090607040000010014036c0fa10d02010102012d30050403010203"},
 		{name: "AARQ only bit 1", msg: beginD(aarqD(pv("40", 2), acn3, nil)), is: tcap.ErrUnsupportedProtocolVersion, pathPrefix: "Dialogue"},
 		{name: "AARQ empty bit string", msg: beginD(aarqD(&runtime.BitString{}, acn3, nil)), is: tcap.ErrUnsupportedProtocolVersion},
 		{name: "AARQ bit 0 clear", msg: beginD(aarqD(pv("00", 1), acn3, nil)), is: tcap.ErrUnsupportedProtocolVersion},
 		{name: "AUDT nil", msg: &tcap.Unidirectional{Dialogue: audtD(nil, acn3), Components: []tcap.Component{invokeC(1)}}, want: tlv("61", dialoguePortion(hexUniAS, tlv("60", hexACN3)), tlv("6c", hexInvoke))},
 		{name: "AUDT only bit 1", msg: &tcap.Unidirectional{Dialogue: audtD(pv("40", 2), acn3), Components: []tcap.Component{invokeC(1)}}, is: tcap.ErrUnsupportedProtocolVersion},
-		{name: "AARE version1", msg: aareIn(pv1()), want: tlv("65", hexOTID, hexDTID, dialoguePortion(hexDialogueAS, hexAAREAccDefault))},
-		{name: "AARE version1 with trailing zero bits", msg: aareIn(pv("80", 8)), want: "65344804010203044904050607086b262824060700118605010101a0196117a109060704000001001403a203020100a305a103020100"},
+		{name: "AARE version1", msg: aareIn(pv1()), want: tlv("65", hexOTID, hexDTID, dialoguePortion(hexDialogueAS, hexAAREAcc))},
+		{name: "AARE version1 with trailing zero bits", msg: aareIn(pv("80", 8)), want: "65384804010203044904050607086b2a2828060700118605010101a01d611b80020080a109060704000001001403a203020100a305a103020100"},
 		{name: "AARE version1 and bit 1", msg: aareIn(pv("c0", 2)), is: tcap.ErrUnsupportedProtocolVersion, pathPrefix: "Dialogue"},
 		{name: "AARE only bit 1", msg: aareIn(pv("40", 2)), is: tcap.ErrUnsupportedProtocolVersion},
 		{name: "AARE bit 0 clear", msg: aareIn(pv("00", 1)), is: tcap.ErrUnsupportedProtocolVersion},
@@ -551,7 +550,7 @@ func TestMarshalDialogueRules(t *testing.T) {
 		// Application context name, contract 3.9 and 3.11.
 		{name: "AARQ ACN empty", msg: beginD(aarqD(pv1(), "", nil)), is: tcap.ErrInvalidOID, pathPrefix: "Dialogue"},
 		{name: "AARQ ACN first arc 3", msg: beginD(aarqD(pv1(), "3.1", nil)), is: tcap.ErrInvalidOID},
-		{name: "AARQ ACN beyond uint64", msg: beginD(aarqD(pv1(), "0.4.18446744073709551616", nil)), want: "62374804010203046b1e281c060700118605010101a011600fa10d060b04828080808080808080006c0fa10d02010102012d30050403010203"},
+		{name: "AARQ ACN beyond uint64", msg: beginD(aarqD(pv1(), "0.4.18446744073709551616", nil)), want: "623b4804010203046b222820060700118605010101a015601380020780a10d060b04828080808080808080006c0fa10d02010102012d30050403010203"},
 		{name: "AARE ACN second arc 40", msg: &tcap.Continue{OTID: tidO, DTID: tidD, Dialogue: &tcap.Dialogue{Response: &tcap.AARE{
 			ApplicationContextName: "0.40", ResultSourceDiagnostic: tcap.ResultSourceDiagnostic{DialogueServiceUser: userNull()},
 		}}}, is: tcap.ErrInvalidOID},
@@ -562,17 +561,17 @@ func TestMarshalDialogueRules(t *testing.T) {
 // TestMarshalExternal covers contract 3.10 and the EXTERNAL encodings of
 // ITU-T X.690 (02/2021) clause 8.18 (Q.773 Tables 49 to 53).
 func TestMarshalExternal(t *testing.T) {
-	opaque := func(e tcap.External) *tcap.Begin {
-		return &tcap.Begin{OTID: tidO, Dialogue: &tcap.Dialogue{Opaque: &e}}
+	opaque := func(e tcap.External) *tcap.End {
+		return &tcap.End{DTID: tidD, Dialogue: &tcap.Dialogue{Opaque: &e}}
 	}
 	userInfo := func(e tcap.External) *tcap.Begin {
 		return &tcap.Begin{OTID: tidO, Dialogue: aarqD(pv1(), acn3, []tcap.External{mapUserAbortExt(), e})}
 	}
 	single := hx("0402aabb")
 	runMarshalCases(t, []marshalCase{
-		{name: "octet-aligned", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("010203")}), want: "62144804010203046b0c280a06032a03048103010203"},
-		{name: "single-ASN1-type", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), want: "62154804010203046b0d280b06032a0304a0040402aabb"},
-		{name: "arbitrary", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalArbitrary, Arbitrary: runtime.BitString{Bytes: hx("f0"), BitLength: 4}}), want: "62134804010203046b0b280906032a0304820204f0"},
+		{name: "octet-aligned", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("010203")}), want: "64144904050607086b0c280a06032a03048103010203"},
+		{name: "single-ASN1-type", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), want: "64154904050607086b0d280b06032a0304a0040402aabb"},
+		{name: "arbitrary", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalArbitrary, Arbitrary: runtime.BitString{Bytes: hx("f0"), BitLength: 4}}), want: "64134904050607086b0b280906032a0304820204f0"},
 		{name: "all identification fields", msg: opaque(tcap.External{
 			DirectReference: "1.2.3.4", IndirectReference: big.NewInt(5), DataValueDescriptor: ptr("abc"),
 			Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single,
@@ -583,9 +582,9 @@ func TestMarshalExternal(t *testing.T) {
 		{name: "single-ASN1-type verbatim", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("3081020500")}),
 			constraint: true},
 		{name: "user information two elements", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("0102")}),
-			want: "62404804010203046b382836060700118605010101a02b6029a109060704000001001403be1c280f060704000001010101a004a4028000280906032a030481020102"},
+			want: "62444804010203046b3c283a060700118605010101a02f602d80020780a109060704000001001403be1c280f060704000001010101a004a4028000280906032a030481020102"},
 		{name: "user information present empty", msg: &tcap.Begin{OTID: tidO, Dialogue: aarqD(pv1(), acn3, []tcap.External{}), Components: []tcap.Component{invokeC(1)}},
-			want: "62354804010203046b1c281a060700118605010101a00f600da109060704000001001403be006c0fa10d02010102012d30050403010203"},
+			want: "62394804010203046b20281e060700118605010101a013601180020780a109060704000001001403be006c0fa10d02010102012d30050403010203"},
 
 		{name: "encoding zero", msg: opaque(tcap.External{DirectReference: "1.2.3.4", SingleASN1Type: single}), is: tcap.ErrExternalEncoding, pathPrefix: "Dialogue"},
 		{name: "encoding four", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalEncoding(4), SingleASN1Type: single}), is: tcap.ErrExternalEncoding},

@@ -65,10 +65,9 @@ func ExampleBegin_Marshal() {
 		return
 	}
 	fmt.Printf("%x\n", data)
-	// Marshal omits DEFAULT protocol-version: https://github.com/gomaja/go-asn1/issues/164.
 
 	// Output:
-	// 62334804010203046b1a2818060700118605010101a00d600ba1090607040000010014036c0fa10d02010102012d30050403010203
+	// 62374804010203046b1e281c060700118605010101a011600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203
 }
 
 // Answer a Begin with a Continue that accepts the proposed application
@@ -99,10 +98,9 @@ func ExampleNewAcceptDialogue() {
 		return
 	}
 	fmt.Printf("%x\n", out)
-	// Marshal omits DEFAULT protocol-version: https://github.com/gomaja/go-asn1/issues/164.
 
 	// Output:
-	// 65464804050607084904010203046b262824060700118605010101a0196117a109060704000001001403a203020100a305a1030201006c10a20e020101300902012d30040402aabb
+	// 654a4804050607084904010203046b2a2828060700118605010101a01d611b80020780a109060704000001001403a203020100a305a1030201006c10a20e020101300902012d30040402aabb
 }
 
 // Refuse a dialogue whose application context is not supported, offering
@@ -120,10 +118,9 @@ func ExampleNewRejectDialogue() {
 		return
 	}
 	fmt.Printf("%x\n", out)
-	// Marshal omits DEFAULT protocol-version: https://github.com/gomaja/go-asn1/issues/164.
 
 	// Output:
-	// 672e4904010203046b262824060700118605010101a0196117a109060704000001001402a203020101a305a103020102
+	// 67324904010203046b2a2828060700118605010101a01d611b80020780a109060704000001001402a203020101a305a103020102
 }
 
 // Abort a transaction from the transaction sub-layer with a P-Abort cause

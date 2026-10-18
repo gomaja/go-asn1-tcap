@@ -37,6 +37,8 @@ func validateDialogue(d *Dialogue, mt MessageType, sender bool) error {
 	if err := alternative(count, ErrDialogueNoAlternative, ErrDialogueMultipleAlternatives); err != nil {
 		return fieldError("Dialogue", err)
 	}
+	// The codec does not check the APDU mapping of Q.774 Table 3:
+	// https://github.com/gomaja/go-asn1/issues/171.
 	allowed := d.Opaque != nil
 	switch mt {
 	case MessageTypeBegin:

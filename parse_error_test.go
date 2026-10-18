@@ -120,7 +120,7 @@ func TestParseErrorUnrecognizedComponent(t *testing.T) {
 func TestParseErrorUnrecognizedMessageType(t *testing.T) {
 	cases := []struct{ name, input, otid, dtid string }{
 		{"[APPLICATION 6] with OTID and DTID", "661d4804010203044904050607086c0fa10d02010102012d30050403010203", "01020304", "05060708"},
-		{"universal SEQUENCE with OTID", "30174804010203046c0fa10d02010102012d30050403010203", "01020304", ""},
+		{"universal SEQUENCE with OTID", "30174804010203046c0fa10d02010102012d30050403010203", "", ""},
 		{"primitive [APPLICATION 2]", "420401020304", "", ""},
 		{"[APPLICATION 3] empty", "6300", "", ""},
 	}
@@ -167,9 +167,9 @@ func TestParseErrorTransactionPortion(t *testing.T) {
 		{"Continue with empty DTID", "651948040102030449006c0fa10d02010102012d30050403010203", parseErrWant{
 			msgTypes: []tcap.MessageType{tcap.MessageTypeContinue}, otid: "01020304", dtid: "", invokeID: unchecked, constraint: true,
 		}},
-		// The OTID has 5 octets, so not derivable; the DTID is.
+		// Strict decoding refuses the 5-octet OTID before accepting either ID.
 		{"Continue with 5-octet OTID", "651e480501020304054904050607086c0fa10d02010102012d30050403010203", parseErrWant{
-			msgTypes: []tcap.MessageType{tcap.MessageTypeContinue}, otid: "", dtid: "05060708", invokeID: unchecked, constraint: true,
+			msgTypes: []tcap.MessageType{tcap.MessageTypeContinue}, otid: "", dtid: "", invokeID: unchecked, constraint: true,
 		}},
 	}
 	for _, c := range cases {

@@ -103,8 +103,8 @@ func TestParseAcceptsGenericBER(t *testing.T) {
 				t.Fatal("profile violation was not reported")
 			}
 			assertSameMessage(t, msg, mustParse(t, c.canonical))
-			if out := hex.EncodeToString(mustMarshal(t, msg)); out != freshEncodingHex(c.canonical) {
-				t.Errorf("Marshal: got %s; want %s", out, freshEncodingHex(c.canonical))
+			if out := hex.EncodeToString(mustMarshal(t, msg)); out != c.canonical {
+				t.Errorf("Marshal: got %s; want %s", out, c.canonical)
 			}
 		})
 	}
@@ -141,7 +141,7 @@ func TestParseParameterVerbatim(t *testing.T) {
 			}
 			out, err := msg.Marshal()
 			if profile {
-				if err != nil || hex.EncodeToString(out) != freshEncodingHex(c.input) {
+				if err != nil || hex.EncodeToString(out) != c.input {
 					t.Fatalf("Marshal = %x, %v", out, err)
 				}
 			} else if !errors.As(err, &validation) {
@@ -153,8 +153,9 @@ func TestParseParameterVerbatim(t *testing.T) {
 
 // TestParseOpaqueDialogue: a dialogue portion in an abstract syntax other
 // than dialogue-as-id and uniDialogue-as-id is kept as an opaque EXTERNAL,
-// every field exactly. Unresolved identification and Unidirectional syntax
-// violations require tolerance (Q.773 clause 4.2.3).
+// every field exactly. Unresolved identification and syntax violations in
+// Begin or Unidirectional require tolerance (Q.773 clause 4.2.3; Q.774
+// Figure A.5, sheet 3).
 func TestParseOpaqueDialogue(t *testing.T) {
 	cases := []struct {
 		name, input string
@@ -175,7 +176,7 @@ func TestParseOpaqueDialogue(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			_, strict := tcap.Parse(hx(c.input))
-			nonconforming := c.want.IndirectReference != nil || c.name == "in a Unidirectional"
+			nonconforming := c.want.IndirectReference != nil || c.name == "in a Unidirectional" || hx(c.input)[0] == 0x62
 			var validation *ber.ValidationError
 			if nonconforming && !errors.As(strict, &validation) || !nonconforming && strict != nil {
 				t.Fatalf("strict Parse = %v", strict)
@@ -201,7 +202,7 @@ func TestParseOpaqueDialogue(t *testing.T) {
 				if !errors.As(err, &validation) {
 					t.Fatalf("strict Marshal = %x, %v", out, err)
 				}
-			} else if err != nil || hex.EncodeToString(out) != freshEncodingHex(c.input) {
+			} else if err != nil || hex.EncodeToString(out) != c.input {
 				t.Fatalf("Marshal = %x, %v", out, err)
 			}
 		})
@@ -269,8 +270,8 @@ func TestParseDialoguePlacement(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Parse: %v", err)
 					}
-					if out := hex.EncodeToString(mustMarshal(t, msg)); out != freshEncodingHex(input) {
-						t.Errorf("Marshal:\n got %s\nwant %s", out, freshEncodingHex(input))
+					if out := hex.EncodeToString(mustMarshal(t, msg)); out != input {
+						t.Errorf("Marshal:\n got %s\nwant %s", out, input)
 					}
 					return
 				}
@@ -309,7 +310,7 @@ func TestParseProtocolVersion(t *testing.T) {
 			}
 			out, err := msg.Marshal()
 			if c.offers {
-				if err != nil || hex.EncodeToString(out) != freshEncodingHex(c.input) {
+				if err != nil || hex.EncodeToString(out) != c.input {
 					t.Errorf("Marshal = %x, %v; want %s", out, err, c.input)
 				}
 			} else if !errors.Is(err, tcap.ErrUnsupportedProtocolVersion) {
@@ -361,8 +362,8 @@ func TestParseProtocolVersion(t *testing.T) {
 			t.Fatalf("dialogue %s", jsonText(normDialogue(d)))
 		}
 		wantBits(t, "protocol-version", d.Response.ProtocolVersion, "80", 8)
-		if out := hex.EncodeToString(mustMarshal(t, msg)); out != freshEncodingHex(input) {
-			t.Errorf("Marshal:\n got %s\nwant %s", out, freshEncodingHex(input))
+		if out := hex.EncodeToString(mustMarshal(t, msg)); out != input {
+			t.Errorf("Marshal:\n got %s\nwant %s", out, input)
 		}
 	})
 }
@@ -383,8 +384,8 @@ func TestParseUserInformation(t *testing.T) {
 		if d == nil || d.Request == nil || d.Request.UserInformation == nil || len(d.Request.UserInformation) != 0 {
 			t.Fatalf("dialogue %s, want non-nil empty user information", jsonText(normDialogue(d)))
 		}
-		if out := hex.EncodeToString(mustMarshal(t, msg)); out != freshEncodingHex(input) {
-			t.Errorf("Marshal:\n got %s\nwant %s", out, freshEncodingHex(input))
+		if out := hex.EncodeToString(mustMarshal(t, msg)); out != input {
+			t.Errorf("Marshal:\n got %s\nwant %s", out, input)
 		}
 	})
 	t.Run("two elements in order", func(t *testing.T) {
@@ -399,8 +400,8 @@ func TestParseUserInformation(t *testing.T) {
 		if !reflect.DeepEqual(got, w) {
 			t.Errorf("user information:\n got %s\nwant %s", jsonText(got), jsonText(w))
 		}
-		if out := hex.EncodeToString(mustMarshal(t, msg)); out != freshEncodingHex(input) {
-			t.Errorf("Marshal:\n got %s\nwant %s", out, freshEncodingHex(input))
+		if out := hex.EncodeToString(mustMarshal(t, msg)); out != input {
+			t.Errorf("Marshal:\n got %s\nwant %s", out, input)
 		}
 	})
 	// The provider ABRT rule of Q.774 clause 3.2.2.1 is a sender rule only.
@@ -542,7 +543,7 @@ func TestMarshalDoesNotAliasOrMutate(t *testing.T) {
 	build := func() []tcap.Message {
 		return []tcap.Message{
 			&tcap.Begin{OTID: tcap.TransactionID{1, 2, 3, 4}, Dialogue: aarqD(pv1(), acn3, []tcap.External{mapUserAbortExt()}), Components: []tcap.Component{invokeC(1)}},
-			&tcap.Begin{OTID: tcap.TransactionID{1, 2, 3, 4}, Dialogue: &tcap.Dialogue{Opaque: opaqueE()}},
+			&tcap.End{DTID: tcap.TransactionID{1, 2, 3, 4}, Dialogue: &tcap.Dialogue{Opaque: opaqueE()}},
 			&tcap.Continue{OTID: tcap.TransactionID{1}, DTID: tcap.TransactionID{2}, Components: []tcap.Component{
 				{ReturnResultNotLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.GlobalCode("1.2.3"), Parameter: hx("0500")}}},
 				{ReturnError: &tcap.ReturnError{InvokeID: 2, ErrorCode: tcap.LocalCode(7), Parameter: hx("0401ff")}},
@@ -669,14 +670,14 @@ func TestParseClearsUnusedBits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if want := "65344804050607084904010203046b262824060700118605010101a0196117a109060704000001001403a203020100a305a103020100"; hex.EncodeToString(out) != freshEncodingHex(want) {
+	if want := "65384804050607084904010203046b2a2828060700118605010101a01d611b80020780a109060704000001001403a203020100a305a103020100"; hex.EncodeToString(out) != want {
 		t.Fatalf("Marshal %x, want %s", out, want)
 	}
 
-	// Begin with an opaque dialogue portion: EXTERNAL arbitrary [2] with four
+	// End with an opaque dialogue portion: EXTERNAL arbitrary [2] with four
 	// unused bits, one of them set (found by FuzzParse).
-	m = mustParse(t, "62134804303030306b0b2809060330303082020431")
-	o := m.(*tcap.Begin).Dialogue.Opaque
+	m = mustParse(t, "64134904303030306b0b2809060330303082020431")
+	o := m.(*tcap.End).Dialogue.Opaque
 	if o.Encoding != runtime.ExternalArbitrary || o.Arbitrary.BitLength != 4 || !bytes.Equal(o.Arbitrary.Bytes, []byte{0x30}) {
 		t.Fatalf("arbitrary %+v, want 30/4", o.Arbitrary)
 	}
@@ -684,7 +685,7 @@ func TestParseClearsUnusedBits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if want := "62134804303030306b0b2809060330303082020430"; hex.EncodeToString(out) != freshEncodingHex(want) {
+	if want := "64134904303030306b0b2809060330303082020430"; hex.EncodeToString(out) != want {
 		t.Fatalf("Marshal %x, want %s", out, want)
 	}
 }

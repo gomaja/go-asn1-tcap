@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"reflect"
 	"testing"
 
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
@@ -291,7 +292,7 @@ func TestInternalRecipesAndOwnership(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !internalSameMessage(m, parsed) {
+		if !reflect.DeepEqual(m, parsed) {
 			t.Fatalf("nil/empty or values changed: %#v", parsed)
 		}
 		original := bytes.Clone(out)

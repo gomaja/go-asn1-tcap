@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"reflect"
 	"testing"
 
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
@@ -23,7 +24,8 @@ func TestInternalExternalEncodings(t *testing.T) {
 			e.Arbitrary = runtime.BitString{Bytes: []byte{0xa0}, BitLength: 3}
 		}
 		for _, msg := range []Message{
-			&Begin{OTID: TransactionID{1}, Dialogue: &Dialogue{Opaque: &e}},
+			&Begin{OTID: TransactionID{1}, Dialogue: &Dialogue{Request: &AARQ{ApplicationContextName: "1.2", UserInformation: []External{e}}}},
+			&End{DTID: TransactionID{2}, Dialogue: &Dialogue{Opaque: &e}},
 			&Continue{OTID: TransactionID{1}, DTID: TransactionID{2}, Dialogue: NewAcceptDialogue("1.2", []External{e})},
 			&End{DTID: TransactionID{2}, Dialogue: NewAcceptDialogue("1.2", []External{e})},
 			&Abort{DTID: TransactionID{2}, Dialogue: NewUserAbortDialogue([]External{e})},
@@ -37,7 +39,7 @@ func TestInternalExternalEncodings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !internalSameMessage(msg, m) {
+			if !reflect.DeepEqual(msg, m) {
 				t.Fatalf("round trip changed %T", msg)
 			}
 		}
@@ -158,7 +160,7 @@ func TestInternalProtocolVersions(t *testing.T) {
 			t.Fatal(err)
 		}
 		back, err := Parse(out)
-		if err != nil || !internalSameMessage(m, back) {
+		if err != nil || !reflect.DeepEqual(m, back) {
 			t.Fatal(err)
 		}
 	}

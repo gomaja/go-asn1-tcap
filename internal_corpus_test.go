@@ -67,14 +67,11 @@ func TestInternalCorpus(t *testing.T) {
 				t.Fatal(err)
 			}
 			expected := data
-			if value, ok := internalCorpusMarshalEncodings[v.ID]; ok {
-				expected = internalHex(t, value)
-			}
 			if !strings.Contains(v.ID, "indefinite") && !bytes.Equal(encoded, expected) {
 				t.Fatalf("encoding %x, want %x", encoded, expected)
 			}
 			again, err := Parse(encoded)
-			if err != nil || !internalSameMessage(m, again) {
+			if err != nil || !reflect.DeepEqual(m, again) {
 				t.Fatalf("round trip: %v", err)
 			}
 		})
@@ -378,15 +375,12 @@ func TestInternalCaptures(t *testing.T) {
 				t.Fatal(err)
 			}
 			expected := data
-			if value, ok := internalCaptureMarshalEncodings[v.Name]; ok {
-				expected = internalHex(t, value)
-			}
 			if !bytes.Equal(expected, out) {
 				if !strings.Contains(v.Name, "Camel-V2") {
 					t.Fatalf("encoding differs: %x", out)
 				}
 				again, err := Parse(out)
-				if err != nil || !internalSameMessage(m, again) {
+				if err != nil || !reflect.DeepEqual(m, again) {
 					t.Fatalf("round trip: %v", err)
 				}
 			}

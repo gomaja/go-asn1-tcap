@@ -20,9 +20,12 @@ import (
 // The dialogue PDUs a message may carry are those of ITU-T Q.774 (06/97)
 // Table 3: AARQ in a Begin; AARE with result accepted in a Continue or an End;
 // AARE with another result, or ABRT, in an Abort; AUDT in a Unidirectional.
-// These rules apply to strict and tolerant Parse and to Marshal. The Table 3
-// check permits Opaque in any message; the codec's Q.773 clause 4.2.3 check
-// requires AUDT syntax in a Unidirectional under strict Parse and Marshal.
+// These rules apply to strict and tolerant Parse and to Marshal. Strict
+// Parse and Marshal permit Opaque only in Continue, End and Abort. Begin
+// requires dialogue control syntax (Q.774 Figure A.5, sheet 3), and
+// Unidirectional requires uniDialogue-as with AUDT (Q.773 clause 4.2.3).
+// WithTolerance accepts Opaque in Begin and Unidirectional and records the
+// syntax violation.
 type Dialogue struct {
 	Request        *AARQ
 	Response       *AARE
@@ -33,8 +36,9 @@ type Dialogue struct {
 
 // AARQ is the dialogue request APDU (Q.773 clause 3.2.1, AARQ-apdu).
 //
-// A nil ProtocolVersion has the DEFAULT {version1}; encoding also omits
-// an explicit value equal to that default, including trailing zero bits.
+// A nil ProtocolVersion is omitted and means the DEFAULT {version1}.
+// A non-nil value is encoded, including ProtocolVersion1() (ITU-T X.690
+// (02/2021) clause 8.9.3).
 // A nil UserInformation omits the field; a non-nil empty slice encodes an
 // empty sequence.
 type AARQ struct {
@@ -44,7 +48,9 @@ type AARQ struct {
 }
 
 // AARE is the dialogue response APDU (Q.773 clause 3.2.1, AARE-apdu). The
-// zero value of Result is accepted.
+// zero value of Result is accepted. A nil ProtocolVersion is omitted and
+// means the DEFAULT {version1}; a non-nil value is encoded (ITU-T X.690
+// (02/2021) clause 8.9.3).
 type AARE struct {
 	ProtocolVersion        *runtime.BitString
 	ApplicationContextName OID
@@ -68,6 +74,8 @@ type ABRT struct {
 }
 
 // AUDT is the unidirectional dialogue APDU (Q.773 clause 3.2.2, AUDT-apdu).
+// A nil ProtocolVersion is omitted and means the DEFAULT {version1}; a
+// non-nil value is encoded (ITU-T X.690 (02/2021) clause 8.9.3).
 type AUDT struct {
 	ProtocolVersion        *runtime.BitString
 	ApplicationContextName OID
@@ -92,9 +100,9 @@ type External struct {
 }
 
 // ProtocolVersion1 returns a new BitString containing {version1}, the only
-// version defined by ITU-T Q.773 (06/97) clause 3.2. Marshal omits this value
-// in AARQ, AARE and AUDT because it equals the DEFAULT. Trailing zero bits
-// do not change that value.
+// version defined by ITU-T Q.773 (06/97) clause 3.2. Marshal encodes it as
+// 80 02 07 80 in AARQ, AARE and AUDT. A nil ProtocolVersion omits the field
+// and means the same version.
 func ProtocolVersion1() *runtime.BitString {
 	return &runtime.BitString{Bytes: []byte{0x80}, BitLength: 1}
 }
