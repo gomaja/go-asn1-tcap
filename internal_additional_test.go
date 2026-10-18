@@ -52,24 +52,24 @@ func TestInternalExternalEncodings(t *testing.T) {
 		case runtime.ExternalArbitrary:
 			bad.SingleASN1Type = []byte{5, 0}
 		}
-		if _, err := internalWithDialogue(&Dialogue{Opaque: &bad}).Marshal(); !errors.Is(err, ErrExternalEncoding) {
+		if _, err := (&End{DTID: TransactionID{1}, Dialogue: &Dialogue{Opaque: &bad}}).Marshal(); !errors.Is(err, ErrExternalEncoding) {
 			t.Fatal(err)
 		}
 	}
 	e := internalExternal()
 	e.DirectReference = ""
-	if _, err := internalWithDialogue(&Dialogue{Opaque: &e}).Marshal(); !errors.Is(err, ber.ErrInvalidValue) {
+	if _, err := (&End{DTID: TransactionID{1}, Dialogue: &Dialogue{Opaque: &e}}).Marshal(); !errors.Is(err, ber.ErrInvalidValue) {
 		t.Fatal(err)
 	}
 	e.IndirectReference = big.NewInt(1)
-	_, err := internalWithDialogue(&Dialogue{Opaque: &e}).Marshal()
+	_, err := (&End{DTID: TransactionID{1}, Dialogue: &Dialogue{Opaque: &e}}).Marshal()
 	if !errors.Is(err, ber.ErrInvalidValue) {
 		t.Fatalf("unresolved dialogue EXTERNAL: %v", err)
 	}
 	var reports ber.ViolationLog
-	data := internalTLV(0x62, []byte{0x48, 1, 1}, internalTLV(0x6b, internalTLV(0x28, []byte{2, 1, 1}, []byte{0xa0, 2, 5, 0})))
+	data := internalTLV(0x64, []byte{0x49, 1, 1}, internalTLV(0x6b, internalTLV(0x28, []byte{2, 1, 1}, []byte{0xa0, 2, 5, 0})))
 	m, err := Parse(data, WithTolerance(&reports))
-	if err != nil || len(reports.Snapshot()) == 0 || m.(*Begin).Dialogue.Opaque.DirectReference != "" {
+	if err != nil || len(reports.Snapshot()) == 0 || m.(*End).Dialogue.Opaque.DirectReference != "" {
 		t.Fatalf("%v", err)
 	}
 }

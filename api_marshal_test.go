@@ -484,7 +484,7 @@ func TestMarshalDialoguePlacement(t *testing.T) {
 			c := marshalCase{name: mt + "/" + a.name, msg: msg}
 			if allowed[mt][a.name] {
 				c.want = want
-			} else if (mt == "Begin" || mt == "Unidirectional") && a.name == "Opaque" {
+			} else if mt == "Unidirectional" && a.name == "Opaque" {
 				c.constraint = true
 			} else {
 				c.is = tcap.ErrUnexpectedDialoguePDU

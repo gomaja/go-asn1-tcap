@@ -21,10 +21,11 @@ type parseConfig struct {
 
 // WithTolerance makes Parse accept other valid BER representations and
 // values outside their ASN.1 constraints, recording each violation in log
-// only if Parse succeeds. BER structure errors and the dialogue rules of
-// ITU-T Q.774 (06/97) Table 3 apply in both modes. Marshal stays strict:
-// parameters and EXTERNAL single-ASN1-type contents that violate Q.773 clause
-// 4.1.1 must be corrected before encoding. log must not be nil.
+// only if Parse succeeds. BER structure errors and the rules this package
+// applies itself, such as the dialogue rules of ITU-T Q.774 (06/97) Table 3,
+// apply in both modes. Marshal stays strict: parameters and EXTERNAL
+// single-ASN1-type contents that violate Q.773 clause 4.1.1 must be
+// corrected before encoding. log must not be nil.
 // If supplied more than once, the last WithTolerance wins.
 func WithTolerance(log *ber.ViolationLog) ParseOption {
 	return toleranceParseOption{log}
@@ -41,10 +42,8 @@ func WithDecodeLimits(limits ber.DecodeLimits) ParseOption {
 //
 // It returns a *Begin, *Continue, *End, *Abort or *Unidirectional. Every
 // error caused by the data is a *ParseError; an invalid option returns an
-// error wrapping ErrInvalidParseOption. On a codec failure, transaction IDs
-// come from wire.DecodeError.Prefix under the active options; inspection
-// identifies the failing portion for ITU-T Q.774 (06/97) clause 3.2.2.
-// The returned message and error context do not alias data.
+// error wrapping ErrInvalidParseOption. The returned message and error
+// context do not alias data.
 func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) {
 	config := parseConfig{}
 	for _, opt := range opts {
@@ -90,10 +89,6 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 		// failing, or else the message failure reported by the codec.
 		if pe.Portion == PortionTransaction || pe.Err == nil {
 			pe.Err = joinErrors(pe.Err, err)
-		}
-		var failure *wire.DecodeError
-		if errors.As(err, &failure) {
-			decodeFailureIDs(pe, failure)
 		}
 		return nil, pe
 	}

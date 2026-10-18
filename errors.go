@@ -9,6 +9,10 @@ import (
 // Errors reported by Marshal and Parse. ASN.1 size and value constraints are
 // reported as *ber.ValidationError instead. BER structure errors retain the
 // codec's causes, including parameter and EXTERNAL single-ASN1-type errors.
+// The codec checks the ASN.1 of Q.773 Annex A and X.880, the encoding rules
+// of X.680 and X.690, and Q.773 clauses 4.1.1, 4.2.2.2 and 4.2.3. The
+// sentinels below report the rules this package applies itself: the Q.774
+// procedure rules and the limits of its Go model.
 var (
 	// ErrEmptyData reports that Parse received no octets.
 	ErrEmptyData = errors.New("tcap: empty data")
@@ -65,8 +69,9 @@ var (
 	ErrUnexpectedDialoguePDU = errors.New("tcap: unexpected dialogue PDU")
 
 	// ErrUnexpectedDialogueResult reports an AARE whose result does not suit
-	// the message: a Continue or an End carries an AARE that accepts the
-	// dialogue, an Abort one that rejects it (Q.774 Table 3).
+	// the message: a Continue or an End carries one with result accepted, an
+	// Abort one with result reject-permanent, and no message one with another
+	// result (ITU-T Q.774 (06/97) Table 3, Note 3; clauses 3.2.1.2 and 3.2.3).
 	ErrUnexpectedDialogueResult = errors.New("tcap: unexpected dialogue result")
 
 	// ErrUnexpectedUserInformation reports user information in an ABRT whose
@@ -134,14 +139,16 @@ type ParseError struct {
 	// not recognized or its tag cannot be decoded.
 	MessageType MessageType
 
-	// OTID and DTID are the transaction IDs accepted by the codec under the
-	// active options, for the abnormal procedures of ITU-T Q.774 (06/97)
-	// clauses 3.2.2 and 3.3.4 and Table 7. When decoding fails, they are copied
-	// from wire.DecodeError.Prefix. A leading accepted ID remains derivable
-	// when a duplicate follows or the message's header violates Q.773 clause
-	// 4.1.1. Decode limits also govern which IDs the codec accepts. IDs are
-	// nil when not derivable; an empty ID accepted with WithTolerance is
-	// non-nil.
+	// OTID and DTID are the transaction IDs derivable for the abnormal
+	// procedures of ITU-T Q.774 (06/97) clauses 3.2.2 and 3.3.4 and Table 7,
+	// which leaves derivability to the implementation. When the codec fails,
+	// they are the IDs it accepted (wire.DecodeError.Prefix), except an OTID or
+	// DTID whose tag occurs more than once among the elements of the message:
+	// an Abort sent to the wrong one could end an unrelated transaction at the
+	// peer. Repeats are looked for within the decode limits, and not when the
+	// codec itself stopped at a limit; a malformed last element counts by its
+	// tag. IDs are nil when not derivable; an empty ID accepted with
+	// WithTolerance is non-nil.
 	OTID TransactionID
 	DTID TransactionID
 
