@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"reflect"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func internalTLV(tag byte, children ...[]byte) []byte {
@@ -59,22 +58,22 @@ func TestInternalReceiverRules(t *testing.T) {
 		want error
 	}{
 		{"invoke-null", internalRawBegin(internalTLV(0xa1, []byte{5, 0}, code)), nil},
-		{"result-last-null", internalRawBegin(internalTLV(0xa2, []byte{5, 0})), ErrMissingInvokeID},
-		{"result-not-last-null", internalRawBegin(internalTLV(0xa7, []byte{5, 0})), ErrMissingInvokeID},
-		{"error-null", internalRawBegin(internalTLV(0xa3, []byte{5, 0}, code)), ErrMissingInvokeID},
-		{"linked-null", internalRawBegin(internalTLV(0xa1, id, []byte{0x81, 0}, code)), ErrInvalidLinkedID},
+		{"result-last-null", internalRawBegin(internalTLV(0xa2, []byte{5, 0})), nil},
+		{"result-not-last-null", internalRawBegin(internalTLV(0xa7, []byte{5, 0})), nil},
+		{"error-null", internalRawBegin(internalTLV(0xa3, []byte{5, 0}, code)), nil},
+		{"linked-null", internalRawBegin(internalTLV(0xa1, id, []byte{0x81, 0}, code)), nil},
 		{"invoke-overflow", internalRawBegin(internalTLV(0xa1, large, code)), ber.ErrInvalidValue},
-		{"linked-overflow", internalRawBegin(internalTLV(0xa1, id, internalTLV(0x80, large[2:]), code)), ErrUnrepresentableValue},
+		{"linked-overflow", internalRawBegin(internalTLV(0xa1, id, internalTLV(0x80, large[2:]), code)), ber.ErrInvalidValue},
 		{"code-overflow", internalRawBegin(internalTLV(0xa1, id, large)), ErrUnrepresentableValue},
 		{"result-code-overflow", internalRawBegin(internalTLV(0xa2, id, internalTLV(0x30, large, []byte{5, 0}))), ErrUnrepresentableValue},
 		{"error-code-overflow", internalRawBegin(internalTLV(0xa3, id, large)), ErrUnrepresentableValue},
-		{"reject-overflow", internalRawBegin(internalTLV(0xa4, large, []byte{0x80, 1, 0})), ErrUnrepresentableValue},
+		{"reject-overflow", internalRawBegin(internalTLV(0xa4, large, []byte{0x80, 1, 0})), ber.ErrInvalidValue},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse(tc.data)
 			var pe *ParseError
-			var ce *ber.ConstraintError
+			var ce *ber.ValidationError
 			wantCause := errors.Is(err, tc.want)
 			if tc.want == nil {
 				wantCause = errors.As(err, &ce)
@@ -94,12 +93,12 @@ func TestInternalReceiverRules(t *testing.T) {
 			internalTLV(0xa2, encoded), internalTLV(0xa7, encoded), internalTLV(0xa3, encoded, code), internalTLV(0xa4, encoded, []byte{0x80, 1, 0}),
 		} {
 			_, err := Parse(internalRawBegin(component))
-			var ce *ber.ConstraintError
+			var ce *ber.ValidationError
 			if !errors.As(err, &ce) {
 				t.Fatalf("%x: %v", component, err)
 			}
 			var log ber.ViolationLog
-			m, err := Parse(internalRawBegin(component), WithConstraintTolerance(&log))
+			m, err := Parse(internalRawBegin(component), WithTolerance(&log))
 			if err != nil || len(log.Snapshot()) != 1 {
 				t.Fatalf("tolerance: %v %+v", err, log.Snapshot())
 			}
@@ -165,7 +164,7 @@ func TestInternalToleranceStaging(t *testing.T) {
 		}
 		t.Run(v.ID, func(t *testing.T) {
 			var log ber.ViolationLog
-			m, err := Parse(internalHex(t, v.Hex), WithConstraintTolerance(&log))
+			m, err := Parse(internalHex(t, v.Hex), WithTolerance(&log))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -177,7 +176,7 @@ func TestInternalToleranceStaging(t *testing.T) {
 	}
 	var log ber.ViolationLog
 	good := internalRawBegin(internalTLV(0xa1, ber.EncodeInteger(128), []byte{2, 1, 1}))
-	if _, err := Parse(good, WithConstraintTolerance(&log)); err != nil {
+	if _, err := Parse(good, WithTolerance(&log)); err != nil {
 		t.Fatal(err)
 	}
 	for _, bad := range [][]byte{
@@ -185,14 +184,14 @@ func TestInternalToleranceStaging(t *testing.T) {
 		internalRawBegin(internalTLV(0xa1, ber.EncodeInteger(128), []byte{0x81, 0}, []byte{2, 1, 1})),
 		internalRawBegin(internalTLV(0xa1, ber.EncodeInteger(128), []byte{2, 1, 1}), internalTLV(0xa1, []byte{5, 0}, []byte{2, 1, 1})),
 	} {
-		if _, err := Parse(bad, WithConstraintTolerance(&log)); err == nil {
+		if _, err := Parse(bad, WithTolerance(&log)); err == nil {
 			t.Fatal("bad message accepted")
 		}
 		if len(log.Snapshot()) != 1 {
 			t.Fatalf("failed call published reports: %+v", log.Snapshot())
 		}
 	}
-	if _, err := Parse(good, WithConstraintTolerance(nil)); err == nil {
+	if _, err := Parse(good, WithTolerance(nil)); err == nil {
 		t.Fatal("nil tolerance destination accepted")
 	}
 }
@@ -236,7 +235,7 @@ func TestInternalInspection(t *testing.T) {
 	if _, err := Parse(internalRawBegin(prefix), WithDecodeLimits(ber.DecodeLimits{})); err != nil {
 		t.Fatal(err)
 	}
-	if got := (&ParseError{MessageType: MessageTypeBegin, Portion: PortionComponent, ComponentIndex: 2, Err: ErrMissingInvokeID}).Error(); got != "tcap: parse Begin: component portion component 2: missing invoke ID" {
+	if got := (&ParseError{MessageType: MessageTypeBegin, Portion: PortionComponent, ComponentIndex: 2, Err: nil}).Error(); got != "tcap: parse Begin: component portion component 2: <nil>" {
 		t.Fatal(got)
 	}
 }
@@ -292,7 +291,7 @@ func TestInternalRecipesAndOwnership(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(m, parsed) {
+		if !internalSameMessage(m, parsed) {
 			t.Fatalf("nil/empty or values changed: %#v", parsed)
 		}
 		original := bytes.Clone(out)
@@ -326,7 +325,7 @@ func TestInternalRecipesAndOwnership(t *testing.T) {
 		if components != nil {
 			data = internalTLV(0x62, []byte{0x48, 1, 1}, []byte{0x6c, 0})
 		}
-		m, err := Parse(data, WithConstraintTolerance(&log))
+		m, err := Parse(data, WithTolerance(&log))
 		if err != nil {
 			t.Fatal(err)
 		}

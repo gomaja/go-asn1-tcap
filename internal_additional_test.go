@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"reflect"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func TestInternalExternalEncodings(t *testing.T) {
@@ -38,7 +37,7 @@ func TestInternalExternalEncodings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(msg, m) {
+			if !internalSameMessage(msg, m) {
 				t.Fatalf("round trip changed %T", msg)
 			}
 		}
@@ -61,12 +60,14 @@ func TestInternalExternalEncodings(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.IndirectReference = big.NewInt(1)
-	data, err := internalWithDialogue(&Dialogue{Opaque: &e}).Marshal()
-	if err != nil {
-		t.Fatal(err)
+	_, err := internalWithDialogue(&Dialogue{Opaque: &e}).Marshal()
+	if !errors.Is(err, ber.ErrInvalidValue) {
+		t.Fatalf("unresolved dialogue EXTERNAL: %v", err)
 	}
-	m, err := Parse(data)
-	if err != nil || m.(*Begin).Dialogue.Opaque.DirectReference != "" {
+	var reports ber.ViolationLog
+	data := internalTLV(0x62, []byte{0x48, 1, 1}, internalTLV(0x6b, internalTLV(0x28, []byte{2, 1, 1}, []byte{0xa0, 2, 5, 0})))
+	m, err := Parse(data, WithTolerance(&reports))
+	if err != nil || len(reports.Snapshot()) == 0 || m.(*Begin).Dialogue.Opaque.DirectReference != "" {
 		t.Fatalf("%v", err)
 	}
 }
@@ -157,7 +158,7 @@ func TestInternalProtocolVersions(t *testing.T) {
 			t.Fatal(err)
 		}
 		back, err := Parse(out)
-		if err != nil || !reflect.DeepEqual(m, back) {
+		if err != nil || !internalSameMessage(m, back) {
 			t.Fatal(err)
 		}
 	}
@@ -189,8 +190,8 @@ func TestInternalDiagnosticOwnership(t *testing.T) {
 
 func TestInternalConversionCopies(t *testing.T) {
 	parameter := []byte{4, 1, 9}
-	ros := wire.NewComponentPortionElemBasicROSBoundInvoke(wire.ComponentPortionElemBasicROSInvokeBound{InvokeId: wire.NewTCInvokeIdSetPresent(1), Opcode: wire.NewCodeLocal(big.NewInt(2)), Argument: &runtime.RawValue{Bytes: parameter}})
-	c, err := decodeComponent(wire.NewComponentPortionElemBoundBasicROS(ros), "Components[0]", nil)
+	ros := wire.NewROSInvoke(wire.Invoke{InvokeId: wire.NewTCInvokeIdSetPresentInt64(1), Opcode: wire.NewCodeLocal(big.NewInt(2)), Argument: &runtime.RawValue{Bytes: parameter}})
+	c, err := decodeComponent(wire.NewComponentBasicROS(ros))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func TestInternalReviewF5CloneBits(t *testing.T) {
@@ -134,7 +134,7 @@ func TestInternalReview3ElementLength(t *testing.T) {
 }
 
 // transactionIDValue decodes the BER forms of an OCTET STRING with the
-// caller's limits and constraint tolerance (ITU-T X.690 (02/2021) clause 8.7).
+// caller's limits and tolerance (ITU-T X.690 (02/2021) clause 8.7).
 func TestInternalReview3TransactionIDValue(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -160,7 +160,7 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in, _ := hex.DecodeString(tc.in)
-			got, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithConstraintTolerance(&ber.ViolationLog{})})
+			got, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithTolerance(&ber.ViolationLog{})})
 			if ok != tc.ok || ok && hex.EncodeToString(got) != tc.want {
 				t.Fatalf("transactionIDValue(%s) = %x, %t; want %s, %t", tc.in, got, ok, tc.want, tc.ok)
 			}
@@ -173,7 +173,7 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 	}{
 		{"480401020304", 4, true},
 		{"48050102030405", 4, false},
-		{"68080402010204020304", 4, true},
+		{"68080402010204020304", 4, false},
 		{"6809040201020403030405", 4, false},
 		{"6809040201020403030405", -1, true},
 		{"48050102030405", -1, true},
@@ -181,7 +181,7 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 		in, _ := hex.DecodeString(tc.in)
 		var opts []ber.DecodeOption
 		if tc.maxLen < 0 {
-			opts = append(opts, ber.WithConstraintTolerance(&ber.ViolationLog{}))
+			opts = append(opts, ber.WithTolerance(&ber.ViolationLog{}))
 		}
 		if _, ok := transactionIDValue(in, opts); ok != tc.ok {
 			t.Errorf("transactionIDValue(%s, maxLen %d) ok = %t", tc.in, tc.maxLen, ok)
@@ -202,14 +202,8 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 	segments = append(segments, 0x04, 0x01, 0x01)
 	segments[0] = 0x68
 	limits := ber.DecodeLimits{MaxDepth: 40001, MaxElements: 40002, MaxWork: len(segments)}
-	// The runtime charges segmented strings at each nesting level:
-	// https://github.com/gomaja/go-asn1/issues/151.
-	if _, ok := transactionIDValue(segments, []ber.DecodeOption{ber.WithDecodeLimits(limits)}); ok {
-		t.Fatal("accepted nested segments beyond the codec's work budget")
-	}
-	limits.MaxWork = math.MaxInt
-	if got, ok := transactionIDValue(segments, []ber.DecodeOption{ber.WithDecodeLimits(limits)}); !ok || hex.EncodeToString(got) != "01" {
-		t.Fatalf("40000 levels with sufficient codec work budget: %x, %t", got, ok)
+	if got, ok := transactionIDValue(segments, []ber.DecodeOption{ber.WithDecodeLimits(limits), ber.WithTolerance(&ber.ViolationLog{})}); !ok || hex.EncodeToString(got) != "01" {
+		t.Fatalf("40000 levels within the work budget: %x, %t", got, ok)
 	}
 
 	deep := "0401aa"
@@ -222,20 +216,20 @@ func TestInternalReview3TransactionIDValue(t *testing.T) {
 		limits.MaxDepth = d
 		return limits
 	}
-	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(depth(3)), ber.WithConstraintTolerance(&ber.ViolationLog{})}); ok {
+	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(depth(3)), ber.WithTolerance(&ber.ViolationLog{})}); ok {
 		t.Fatal("a segment nested deeper than MaxDepth accepted")
 	}
-	if got, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(depth(4)), ber.WithConstraintTolerance(&ber.ViolationLog{})}); !ok || hex.EncodeToString(got) != "aa" {
+	if got, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(depth(4)), ber.WithTolerance(&ber.ViolationLog{})}); !ok || hex.EncodeToString(got) != "aa" {
 		t.Fatalf("segments within MaxDepth: %x, %t", got, ok)
 	}
 	// The element and its 4 segments are 5 elements.
 	elements := ber.DefaultDecodeLimits()
 	elements.MaxElements = 4
-	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(elements), ber.WithConstraintTolerance(&ber.ViolationLog{})}); ok {
+	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(elements), ber.WithTolerance(&ber.ViolationLog{})}); ok {
 		t.Fatal("more segments than MaxElements accepted")
 	}
 	elements.MaxElements = 5
-	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(elements), ber.WithConstraintTolerance(&ber.ViolationLog{})}); !ok {
+	if _, ok := transactionIDValue(in, []ber.DecodeOption{ber.WithDecodeLimits(elements), ber.WithTolerance(&ber.ViolationLog{})}); !ok {
 		t.Fatal("segments within MaxElements rejected")
 	}
 }

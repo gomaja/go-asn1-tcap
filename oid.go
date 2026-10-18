@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gomaja/go-asn1/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 )
 
 // OID is an OBJECT IDENTIFIER in canonical dotted-decimal form, for example

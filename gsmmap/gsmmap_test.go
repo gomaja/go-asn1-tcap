@@ -11,14 +11,13 @@ import (
 
 	"github.com/gomaja/go-asn1-tcap"
 	"github.com/gomaja/go-asn1-tcap/gsmmap"
-	"github.com/gomaja/go-asn1/runtime"
 	"github.com/gomaja/go-asn1/telecom/ss7/gsm_map"
 )
 
 var dottedOID = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))+$`)
 
 // dotted formats an object identifier as dotted decimal.
-func dotted(o runtime.ObjectIdentifier) string {
+func dotted(o interface{ String() string }) string {
 	return o.String()
 }
 
@@ -51,7 +50,7 @@ func TestCurrentContextsMatchGoASN1(t *testing.T) {
 		t.Fatalf("table has %d current contexts, want 44", len(currentContexts))
 	}
 	for _, c := range currentContexts {
-		if got, want := string(c.value), dotted(c.fn()); got != want {
+		if got, want := string(c.value), c.oracle; got != want {
 			t.Errorf("%s = %q, go-asn1 returns %q", c.name, got, want)
 		}
 	}

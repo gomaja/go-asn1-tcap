@@ -1,10 +1,7 @@
 package tcap
 
 import (
-	"strconv"
-
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 )
 
 func fieldError(path string, err error) error {
@@ -29,18 +26,6 @@ func set(v bool) int {
 		return 1
 	}
 	return 0
-}
-
-// ITU-T Q.773 (06/97) clause 3.1 defines InvokeIdType ::= INTEGER (-128..127)
-// for every component; clause 4.2.2.2 requires one-octet component IDs.
-// The Annex A binding constrains only Invoke's ID. Linked IDs and the IDs of
-// ReturnResult, ReturnError and Reject need this TCAP check:
-// https://github.com/gomaja/go-asn1/issues/146.
-func checkEncodeComponentID(value int64, path string) error {
-	if value >= -128 && value <= 127 {
-		return nil
-	}
-	return fieldError(path, ber.CheckEncodedValue(nil, path, "(-128..127)", strconv.FormatInt(value, 10)))
 }
 
 // ITU-T Q.774 (06/97) Table 3 governs placement; clause 3.2.3 governs versions.

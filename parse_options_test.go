@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
-	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func TestParseRejectsInvalidOptions(t *testing.T) {
 	for _, opts := range [][]tcap.ParseOption{
-		{tcap.WithConstraintTolerance(nil)},
-		{tcap.WithConstraintTolerance(&ber.ViolationLog{}), tcap.WithConstraintTolerance(nil)},
+		{tcap.WithTolerance(nil)},
+		{tcap.WithTolerance(&ber.ViolationLog{}), tcap.WithTolerance(nil)},
 		{tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: -1})},
 	} {
 		_, err := tcap.Parse([]byte{0}, opts...)
@@ -20,13 +20,13 @@ func TestParseRejectsInvalidOptions(t *testing.T) {
 			t.Fatalf("options: %v", err)
 		}
 	}
-	if err := ber.ValidateDecodeOptions(ber.WithConstraintTolerance(nil)); !errors.Is(err, ber.ErrInvalidValue) {
+	if err := ber.ValidateDecodeOptions(ber.WithTolerance(nil)); !errors.Is(err, ber.ErrInvalidValue) {
 		t.Fatalf("runtime nil-log validation: %v", err)
 	}
 }
 
-func TestParseLastConstraintToleranceWins(t *testing.T) {
-	// Exercise the codec's Invoke bound and the TCAP bounds with separate logs.
+func TestParseLastToleranceWins(t *testing.T) {
+	// Exercise the codec's component ID bounds with separate logs.
 	for _, component := range []string{
 		tlv("a1", "020200c8", "020101"),
 		tlv("a1", "020101", "800200c8", "020101"),
@@ -42,7 +42,7 @@ func TestParseLastConstraintToleranceWins(t *testing.T) {
 				firstLog = nil
 			}
 			m, err := tcap.Parse(hx(tlv("62", "480101", tlv("6c", component))),
-				tcap.WithConstraintTolerance(firstLog), tcap.WithConstraintTolerance(&second))
+				tcap.WithTolerance(firstLog), tcap.WithTolerance(&second))
 			if err != nil || m == nil || len(first.Snapshot()) != 0 || len(second.Snapshot()) != 1 {
 				t.Fatalf("component %s, first nil %t: Parse = %#v, %v; logs %v / %v", component, firstNil, m, err, first.Snapshot(), second.Snapshot())
 			}

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 type internalVector struct {
@@ -49,7 +49,7 @@ func TestInternalCorpus(t *testing.T) {
 		t.Run(v.ID, func(t *testing.T) {
 			data := internalHex(t, v.Hex)
 			m, err := Parse(data)
-			valid := v.Valid && v.ID != "begin-linked-absent"
+			valid := v.Valid && v.ID != "begin-linked-absent" && v.ID != "begin-nonminimal-long-length"
 			if !valid {
 				var pe *ParseError
 				if !errors.As(err, &pe) || m != nil {
@@ -66,11 +66,15 @@ func TestInternalCorpus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(v.ID, "indefinite") && !bytes.Equal(encoded, data) {
-				t.Fatalf("encoding %x, want %x", encoded, data)
+			expected := data
+			if value, ok := internalCorpusMarshalEncodings[v.ID]; ok {
+				expected = internalHex(t, value)
+			}
+			if !strings.Contains(v.ID, "indefinite") && !bytes.Equal(encoded, expected) {
+				t.Fatalf("encoding %x, want %x", encoded, expected)
 			}
 			again, err := Parse(encoded)
-			if err != nil || !reflect.DeepEqual(m, again) {
+			if err != nil || !internalSameMessage(m, again) {
 				t.Fatalf("round trip: %v", err)
 			}
 		})
@@ -83,8 +87,8 @@ func internalNegative(t *testing.T, id string, pe *ParseError) {
 	var sentinel error
 	constraint := false
 	switch id {
-	case "begin-linked-absent":
-		portion, index, sentinel = PortionComponent, 0, ErrInvalidLinkedID
+	case "begin-linked-absent", "begin-nonminimal-long-length":
+		portion, index, constraint = PortionComponent, 0, true
 	case "negative-empty-components":
 		portion, constraint = PortionComponent, true
 	case "negative-invokeid-128", "negative-invokeid--129":
@@ -124,9 +128,9 @@ func internalNegative(t *testing.T, id string, pe *ParseError) {
 	if sentinel != nil && !errors.Is(pe, sentinel) {
 		t.Fatalf("want %v, got %v", sentinel, pe)
 	}
-	var ce *ber.ConstraintError
+	var ce *ber.ValidationError
 	if constraint && !errors.As(pe, &ce) {
-		t.Fatalf("missing ConstraintError: %v", pe)
+		t.Fatalf("missing ValidationError: %v", pe)
 	}
 	if strings.Contains(id, "invokeid") && pe.InvokeID != nil {
 		t.Fatalf("invalid ID derived: %d", *pe.InvokeID)
@@ -267,7 +271,7 @@ func internalCheckIntent(t *testing.T, m Message, intent map[string]json.RawMess
 		if err := json.Unmarshal(intent["p_abort_cause"], &cause); err != nil {
 			t.Fatal(err)
 		}
-		if (abort.PAbortCause == nil) != (cause == nil) || cause != nil && int64(*abort.PAbortCause) != *cause {
+		if (abort.PAbortCause == nil) != (cause == nil) || cause != nil && abort.PAbortCause.BigInt().Int64() != *cause {
 			t.Fatal("P-Abort cause changed")
 		}
 	}
@@ -373,12 +377,16 @@ func TestInternalCaptures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !bytes.Equal(data, out) {
+			expected := data
+			if value, ok := internalCaptureMarshalEncodings[v.Name]; ok {
+				expected = internalHex(t, value)
+			}
+			if !bytes.Equal(expected, out) {
 				if !strings.Contains(v.Name, "Camel-V2") {
 					t.Fatalf("encoding differs: %x", out)
 				}
 				again, err := Parse(out)
-				if err != nil || !reflect.DeepEqual(m, again) {
+				if err != nil || !internalSameMessage(m, again) {
 					t.Fatalf("round trip: %v", err)
 				}
 			}

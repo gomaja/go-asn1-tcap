@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func internalBegin(c Component) Message {
@@ -25,7 +25,7 @@ func TestInternalSenderSentinels(t *testing.T) {
 	ip := wire.InvokeProblemMistypedArgumentValue()
 	user := wire.AssociateSourceDiagnosticDialogueServiceUserValueNullValue()
 	provider := wire.NewAssociateSourceDiagnosticDialogueServiceProviderValueInt64(0)
-	cause := wire.PAbortCause(0)
+	cause := wire.NewPAbortCauseInt64(0)
 	external := internalExternal()
 	badExternal := external
 	badExternal.Encoding = 0
@@ -89,6 +89,11 @@ func TestInternalSenderSentinels(t *testing.T) {
 	}
 }
 
+func internalGeneralProblem() *wire.GeneralProblem {
+	v := wire.GeneralProblemUnrecognizedPDUValue()
+	return &v
+}
+
 func TestInternalSenderConstraints(t *testing.T) {
 	idNames := []string{"Invoke.InvokeID", "Invoke.LinkedID", "ReturnResultLast.InvokeID", "ReturnResultNotLast.InvokeID", "ReturnError.InvokeID", "Reject.InvokeID"}
 	for _, id := range []int64{-129, 128} {
@@ -98,7 +103,7 @@ func TestInternalSenderConstraints(t *testing.T) {
 			{ReturnResultLast: &ReturnResult{InvokeID: id}},
 			{ReturnResultNotLast: &ReturnResult{InvokeID: id}},
 			{ReturnError: &ReturnError{InvokeID: id, ErrorCode: LocalCode(1)}},
-			{Reject: &Reject{InvokeID: &id}},
+			{Reject: &Reject{InvokeID: &id, Problem: Problem{General: internalGeneralProblem()}}},
 		}
 		for i, c := range cases {
 			t.Run(idNames[i]+"/"+strconv.FormatInt(id, 10), func(t *testing.T) { internalConstraint(t, internalBegin(c)) })
@@ -115,8 +120,9 @@ func TestInternalSenderConstraints(t *testing.T) {
 	for i, m := range []Message{&Begin{OTID: TransactionID{1}, Components: []Component{}}, &Continue{OTID: TransactionID{1}, DTID: TransactionID{1}, Components: []Component{}}, &End{DTID: TransactionID{1}, Components: []Component{}}, &Unidirectional{Components: []Component{}}} {
 		t.Run(componentNames[i], func(t *testing.T) { internalConstraint(t, m) })
 	}
-	for _, cause := range []wire.PAbortCause{-1, 128} {
-		t.Run("Abort.PAbortCause/"+strconv.FormatInt(int64(cause), 10), func(t *testing.T) { internalConstraint(t, &Abort{DTID: TransactionID{1}, PAbortCause: &cause}) })
+	for _, value := range []int64{-1, 128} {
+		cause := wire.NewPAbortCauseInt64(value)
+		t.Run("Abort.PAbortCause/"+strconv.FormatInt(value, 10), func(t *testing.T) { internalConstraint(t, &Abort{DTID: TransactionID{1}, PAbortCause: &cause}) })
 	}
 	if _, err := (&Unidirectional{}).Marshal(); err == nil {
 		t.Fatal("missing required components accepted")
@@ -126,9 +132,9 @@ func TestInternalSenderConstraints(t *testing.T) {
 func internalConstraint(t *testing.T, m Message) {
 	t.Helper()
 	_, err := m.Marshal()
-	var ce *ber.ConstraintError
+	var ce *ber.ValidationError
 	if !errors.As(err, &ce) {
-		t.Fatalf("got %v, want ConstraintError", err)
+		t.Fatalf("got %v, want ValidationError", err)
 	}
 }
 

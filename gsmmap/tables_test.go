@@ -6,14 +6,13 @@ package gsmmap_test
 import (
 	"github.com/gomaja/go-asn1-tcap"
 	"github.com/gomaja/go-asn1-tcap/gsmmap"
-	"github.com/gomaja/go-asn1/runtime"
 	"github.com/gomaja/go-asn1/telecom/ss7/gsm_map"
 )
 
 type contextCase struct {
-	name  string
-	value tcap.OID
-	fn    func() runtime.ObjectIdentifier
+	name   string
+	value  tcap.OID
+	oracle string
 }
 
 type codeCase struct {
@@ -25,50 +24,50 @@ type codeCase struct {
 // currentContexts pairs the 44 current contexts with the go-asn1 functions of
 // the same name.
 var currentContexts = []contextCase{
-	{"NetworkLocUpContextV3", gsmmap.NetworkLocUpContextV3, gsm_map.NetworkLocUpContextV3},
-	{"LocationCancellationContextV3", gsmmap.LocationCancellationContextV3, gsm_map.LocationCancellationContextV3},
-	{"RoamingNumberEnquiryContextV3", gsmmap.RoamingNumberEnquiryContextV3, gsm_map.RoamingNumberEnquiryContextV3},
-	{"AuthenticationFailureReportContextV3", gsmmap.AuthenticationFailureReportContextV3, gsm_map.AuthenticationFailureReportContextV3},
-	{"LocationInfoRetrievalContextV3", gsmmap.LocationInfoRetrievalContextV3, gsm_map.LocationInfoRetrievalContextV3},
-	{"ResetContextV3", gsmmap.ResetContextV3, gsm_map.ResetContextV3},
-	{"HandoverControlContextV3", gsmmap.HandoverControlContextV3, gsm_map.HandoverControlContextV3},
-	{"EquipmentMngtContextV3", gsmmap.EquipmentMngtContextV3, gsm_map.EquipmentMngtContextV3},
-	{"InfoRetrievalContextV3", gsmmap.InfoRetrievalContextV3, gsm_map.InfoRetrievalContextV3},
-	{"InterVlrInfoRetrievalContextV3", gsmmap.InterVlrInfoRetrievalContextV3, gsm_map.InterVlrInfoRetrievalContextV3},
-	{"SubscriberDataMngtContextV3", gsmmap.SubscriberDataMngtContextV3, gsm_map.SubscriberDataMngtContextV3},
-	{"TracingContextV3", gsmmap.TracingContextV3, gsm_map.TracingContextV3},
-	{"NetworkFunctionalSsContextV2", gsmmap.NetworkFunctionalSsContextV2, gsm_map.NetworkFunctionalSsContextV2},
-	{"NetworkUnstructuredSsContextV2", gsmmap.NetworkUnstructuredSsContextV2, gsm_map.NetworkUnstructuredSsContextV2},
-	{"ShortMsgGatewayContextV3", gsmmap.ShortMsgGatewayContextV3, gsm_map.ShortMsgGatewayContextV3},
-	{"ShortMsgMORelayContextV3", gsmmap.ShortMsgMORelayContextV3, gsm_map.ShortMsgMORelayContextV3},
-	{"ShortMsgAlertContextV2", gsmmap.ShortMsgAlertContextV2, gsm_map.ShortMsgAlertContextV2},
-	{"MwdMngtContextV3", gsmmap.MwdMngtContextV3, gsm_map.MwdMngtContextV3},
-	{"ShortMsgMTRelayContextV3", gsmmap.ShortMsgMTRelayContextV3, gsm_map.ShortMsgMTRelayContextV3},
-	{"ShortMsgMTRelayVGCSContextV3", gsmmap.ShortMsgMTRelayVGCSContextV3, gsm_map.ShortMsgMTRelayVGCSContextV3},
-	{"ImsiRetrievalContextV2", gsmmap.ImsiRetrievalContextV2, gsm_map.ImsiRetrievalContextV2},
-	{"MsPurgingContextV3", gsmmap.MsPurgingContextV3, gsm_map.MsPurgingContextV3},
-	{"SubscriberInfoEnquiryContextV3", gsmmap.SubscriberInfoEnquiryContextV3, gsm_map.SubscriberInfoEnquiryContextV3},
-	{"AnyTimeInfoEnquiryContextV3", gsmmap.AnyTimeInfoEnquiryContextV3, gsm_map.AnyTimeInfoEnquiryContextV3},
-	{"CallControlTransferContextV4", gsmmap.CallControlTransferContextV4, gsm_map.CallControlTransferContextV4},
-	{"SSInvocationNotificationContextV3", gsmmap.SSInvocationNotificationContextV3, gsm_map.SsInvocationNotificationContextV3},
-	{"GroupCallControlContextV3", gsmmap.GroupCallControlContextV3, gsm_map.GroupCallControlContextV3},
-	{"GroupCallInfoRetrievalContextV3", gsmmap.GroupCallInfoRetrievalContextV3, gsm_map.GroupCallInfoRetrievalContextV3},
-	{"GprsLocationUpdateContextV3", gsmmap.GprsLocationUpdateContextV3, gsm_map.GprsLocationUpdateContextV3},
-	{"GprsLocationInfoRetrievalContextV4", gsmmap.GprsLocationInfoRetrievalContextV4, gsm_map.GprsLocationInfoRetrievalContextV4},
-	{"FailureReportContextV3", gsmmap.FailureReportContextV3, gsm_map.FailureReportContextV3},
-	{"GprsNotifyContextV3", gsmmap.GprsNotifyContextV3, gsm_map.GprsNotifyContextV3},
-	{"ReportingContextV3", gsmmap.ReportingContextV3, gsm_map.ReportingContextV3},
-	{"CallCompletionContextV3", gsmmap.CallCompletionContextV3, gsm_map.CallCompletionContextV3},
-	{"IstAlertingContextV3", gsmmap.IstAlertingContextV3, gsm_map.IstAlertingContextV3},
-	{"ServiceTerminationContextV3", gsmmap.ServiceTerminationContextV3, gsm_map.ServiceTerminationContextV3},
-	{"LocationSvcGatewayContextV3", gsmmap.LocationSvcGatewayContextV3, gsm_map.LocationSvcGatewayContextV3},
-	{"LocationSvcEnquiryContextV3", gsmmap.LocationSvcEnquiryContextV3, gsm_map.LocationSvcEnquiryContextV3},
-	{"MMEventReportingContextV3", gsmmap.MMEventReportingContextV3, gsm_map.MmEventReportingContextV3},
-	{"AnyTimeInfoHandlingContextV3", gsmmap.AnyTimeInfoHandlingContextV3, gsm_map.AnyTimeInfoHandlingContextV3},
-	{"SubscriberDataModificationNotificationContextV3", gsmmap.SubscriberDataModificationNotificationContextV3, gsm_map.SubscriberDataModificationNotificationContextV3},
-	{"ResourceManagementContextV3", gsmmap.ResourceManagementContextV3, gsm_map.ResourceManagementContextV3},
-	{"VcsgLocationUpdateContextV3", gsmmap.VcsgLocationUpdateContextV3, gsm_map.VcsgLocationUpdateContextV3},
-	{"VcsgLocationCancellationContextV3", gsmmap.VcsgLocationCancellationContextV3, gsm_map.VcsgLocationCancellationContextV3},
+	{"NetworkLocUpContextV3", gsmmap.NetworkLocUpContextV3, gsm_map.NetworkLocUpContextV3().String()},
+	{"LocationCancellationContextV3", gsmmap.LocationCancellationContextV3, gsm_map.LocationCancellationContextV3().String()},
+	{"RoamingNumberEnquiryContextV3", gsmmap.RoamingNumberEnquiryContextV3, gsm_map.RoamingNumberEnquiryContextV3().String()},
+	{"AuthenticationFailureReportContextV3", gsmmap.AuthenticationFailureReportContextV3, gsm_map.AuthenticationFailureReportContextV3().String()},
+	{"LocationInfoRetrievalContextV3", gsmmap.LocationInfoRetrievalContextV3, gsm_map.LocationInfoRetrievalContextV3().String()},
+	{"ResetContextV3", gsmmap.ResetContextV3, gsm_map.ResetContextV3().String()},
+	{"HandoverControlContextV3", gsmmap.HandoverControlContextV3, gsm_map.HandoverControlContextV3().String()},
+	{"EquipmentMngtContextV3", gsmmap.EquipmentMngtContextV3, gsm_map.EquipmentMngtContextV3().String()},
+	{"InfoRetrievalContextV3", gsmmap.InfoRetrievalContextV3, gsm_map.InfoRetrievalContextV3().String()},
+	{"InterVlrInfoRetrievalContextV3", gsmmap.InterVlrInfoRetrievalContextV3, gsm_map.InterVlrInfoRetrievalContextV3().String()},
+	{"SubscriberDataMngtContextV3", gsmmap.SubscriberDataMngtContextV3, gsm_map.SubscriberDataMngtContextV3().String()},
+	{"TracingContextV3", gsmmap.TracingContextV3, gsm_map.TracingContextV3().String()},
+	{"NetworkFunctionalSsContextV2", gsmmap.NetworkFunctionalSsContextV2, gsm_map.NetworkFunctionalSsContextV2().String()},
+	{"NetworkUnstructuredSsContextV2", gsmmap.NetworkUnstructuredSsContextV2, gsm_map.NetworkUnstructuredSsContextV2().String()},
+	{"ShortMsgGatewayContextV3", gsmmap.ShortMsgGatewayContextV3, gsm_map.ShortMsgGatewayContextV3().String()},
+	{"ShortMsgMORelayContextV3", gsmmap.ShortMsgMORelayContextV3, gsm_map.ShortMsgMORelayContextV3().String()},
+	{"ShortMsgAlertContextV2", gsmmap.ShortMsgAlertContextV2, gsm_map.ShortMsgAlertContextV2().String()},
+	{"MwdMngtContextV3", gsmmap.MwdMngtContextV3, gsm_map.MwdMngtContextV3().String()},
+	{"ShortMsgMTRelayContextV3", gsmmap.ShortMsgMTRelayContextV3, gsm_map.ShortMsgMTRelayContextV3().String()},
+	{"ShortMsgMTRelayVGCSContextV3", gsmmap.ShortMsgMTRelayVGCSContextV3, gsm_map.ShortMsgMTRelayVGCSContextV3().String()},
+	{"ImsiRetrievalContextV2", gsmmap.ImsiRetrievalContextV2, gsm_map.ImsiRetrievalContextV2().String()},
+	{"MsPurgingContextV3", gsmmap.MsPurgingContextV3, gsm_map.MsPurgingContextV3().String()},
+	{"SubscriberInfoEnquiryContextV3", gsmmap.SubscriberInfoEnquiryContextV3, gsm_map.SubscriberInfoEnquiryContextV3().String()},
+	{"AnyTimeInfoEnquiryContextV3", gsmmap.AnyTimeInfoEnquiryContextV3, gsm_map.AnyTimeInfoEnquiryContextV3().String()},
+	{"CallControlTransferContextV4", gsmmap.CallControlTransferContextV4, gsm_map.CallControlTransferContextV4().String()},
+	{"SSInvocationNotificationContextV3", gsmmap.SSInvocationNotificationContextV3, gsm_map.SsInvocationNotificationContextV3().String()},
+	{"GroupCallControlContextV3", gsmmap.GroupCallControlContextV3, gsm_map.GroupCallControlContextV3().String()},
+	{"GroupCallInfoRetrievalContextV3", gsmmap.GroupCallInfoRetrievalContextV3, gsm_map.GroupCallInfoRetrievalContextV3().String()},
+	{"GprsLocationUpdateContextV3", gsmmap.GprsLocationUpdateContextV3, gsm_map.GprsLocationUpdateContextV3().String()},
+	{"GprsLocationInfoRetrievalContextV4", gsmmap.GprsLocationInfoRetrievalContextV4, gsm_map.GprsLocationInfoRetrievalContextV4().String()},
+	{"FailureReportContextV3", gsmmap.FailureReportContextV3, gsm_map.FailureReportContextV3().String()},
+	{"GprsNotifyContextV3", gsmmap.GprsNotifyContextV3, gsm_map.GprsNotifyContextV3().String()},
+	{"ReportingContextV3", gsmmap.ReportingContextV3, gsm_map.ReportingContextV3().String()},
+	{"CallCompletionContextV3", gsmmap.CallCompletionContextV3, gsm_map.CallCompletionContextV3().String()},
+	{"IstAlertingContextV3", gsmmap.IstAlertingContextV3, gsm_map.IstAlertingContextV3().String()},
+	{"ServiceTerminationContextV3", gsmmap.ServiceTerminationContextV3, gsm_map.ServiceTerminationContextV3().String()},
+	{"LocationSvcGatewayContextV3", gsmmap.LocationSvcGatewayContextV3, gsm_map.LocationSvcGatewayContextV3().String()},
+	{"LocationSvcEnquiryContextV3", gsmmap.LocationSvcEnquiryContextV3, gsm_map.LocationSvcEnquiryContextV3().String()},
+	{"MMEventReportingContextV3", gsmmap.MMEventReportingContextV3, gsm_map.MmEventReportingContextV3().String()},
+	{"AnyTimeInfoHandlingContextV3", gsmmap.AnyTimeInfoHandlingContextV3, gsm_map.AnyTimeInfoHandlingContextV3().String()},
+	{"SubscriberDataModificationNotificationContextV3", gsmmap.SubscriberDataModificationNotificationContextV3, gsm_map.SubscriberDataModificationNotificationContextV3().String()},
+	{"ResourceManagementContextV3", gsmmap.ResourceManagementContextV3, gsm_map.ResourceManagementContextV3().String()},
+	{"VcsgLocationUpdateContextV3", gsmmap.VcsgLocationUpdateContextV3, gsm_map.VcsgLocationUpdateContextV3().String()},
+	{"VcsgLocationCancellationContextV3", gsmmap.VcsgLocationCancellationContextV3, gsm_map.VcsgLocationCancellationContextV3().String()},
 }
 
 // reservedContexts lists the 33 reserved contexts, which go-asn1 does not

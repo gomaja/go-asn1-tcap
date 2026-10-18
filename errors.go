@@ -7,13 +7,13 @@ import (
 )
 
 // Errors reported by Marshal and Parse. ASN.1 size and value constraints are
-// reported as *ber.ConstraintError instead. BER structure errors retain the
+// reported as *ber.ValidationError instead. BER structure errors retain the
 // codec's causes, including parameter and EXTERNAL single-ASN1-type errors.
 var (
 	// ErrEmptyData reports that Parse received no octets.
 	ErrEmptyData = errors.New("tcap: empty data")
 
-	// ErrInvalidParseOption reports a nil ParseOption, WithConstraintTolerance(nil) or
+	// ErrInvalidParseOption reports a nil ParseOption, WithTolerance(nil) or
 	// decode limits that go-asn1 does not accept.
 	ErrInvalidParseOption = errors.New("tcap: invalid parse option")
 
@@ -61,9 +61,7 @@ var (
 	ErrDialogueMultipleAlternatives = errors.New("tcap: dialogue has multiple alternatives")
 
 	// ErrUnexpectedDialoguePDU reports a dialogue PDU that the message type
-	// cannot carry (ITU-T Q.774 (06/97) Table 3), or a dialogue PDU that does
-	// not belong to the abstract syntax named by the dialogue portion (Q.773
-	// clause 4.2.3).
+	// cannot carry (ITU-T Q.774 (06/97) Table 3).
 	ErrUnexpectedDialoguePDU = errors.New("tcap: unexpected dialogue PDU")
 
 	// ErrUnexpectedDialogueResult reports an AARE whose result does not suit
@@ -84,15 +82,14 @@ var (
 	// Dialogue set.
 	ErrAbortMultipleReasons = errors.New("tcap: abort has multiple reasons")
 
-	// ErrMissingInvokeID reports a Return Result or a Return Error whose
-	// invoke ID is NULL, or such an Invoke parsed with WithConstraintTolerance;
-	// only a Reject may omit it (Q.773 Table 18). Without tolerance, the codec
-	// reports a NULL Invoke ID as a *ber.ConstraintError.
+	// ErrMissingInvokeID reports a tolerated NULL component ID that the
+	// required int64 field cannot represent. Strict decoding reports the
+	// codec's *ber.ValidationError (Q.773 clause 4.2.2.2).
 	ErrMissingInvokeID = errors.New("tcap: missing invoke ID")
 
-	// ErrInvalidLinkedID reports a linked ID that is not encoded as
-	// [0] IMPLICIT INTEGER (Q.773 Table 20), such as the X.880 alternative
-	// absent [1] NULL.
+	// ErrInvalidLinkedID reports a tolerated NULL linked ID that the model
+	// cannot represent (Q.773 Table 20). Strict decoding reports the codec
+	// validation error.
 	ErrInvalidLinkedID = errors.New("tcap: invalid linked ID")
 
 	// ErrExternalEncoding reports an External whose Encoding is not one of
@@ -138,17 +135,15 @@ type ParseError struct {
 	MessageType MessageType
 
 	// OTID and DTID are the transaction IDs that could be derived from where
-	// the message type carries them: complete, well-formed, not repeated, and
-	// 1 to 4 octets long (any length with WithConstraintTolerance, empty
-	// included). They are nil otherwise. Repetitions are looked for up to an
-	// element that cannot be decoded. When the message exceeds the decode
-	// limits, an ID is taken from where the message type carries it, without
-	// looking for repetitions, only if it and the elements before it are
-	// valid and within the limits as go-asn1 counts them. An input longer
-	// than MaxWork, a limit that go-asn1 reports without a location, or a
-	// message whose type is not recognized then has no IDs. A message that decoded completely
-	// keeps its IDs when the dialogue PDU inside its EXTERNAL exceeds the
-	// limits.
+	// the message type carries them, as the abnormal procedures of Q.774
+	// clauses 3.2.2 and 3.3.4 and Table 7 need them. An ID is derivable when
+	// it and the elements before it are valid. In strict mode, an ID that
+	// breaks Q.773 clause 4.1.1 is not, and neither is any ID of a message
+	// whose own header breaks it. Parse takes the IDs from
+	// wire.DecodeError.Prefix and finds the others itself, within the decode
+	// limits; when a limit stops decoding, only IDs before it are taken. IDs
+	// are nil when not derivable; an empty ID accepted with WithTolerance is
+	// non-nil.
 	OTID TransactionID
 	DTID TransactionID
 
@@ -166,8 +161,8 @@ type ParseError struct {
 	ComponentType ComponentType
 
 	// InvokeID is the invoke ID of the failing component, when it can be
-	// derived: its first element is an INTEGER from -128 to 127 (any value
-	// with WithConstraintTolerance).
+	// derived: its first element is an INTEGER from -128 to 127, or, with
+	// WithTolerance, any INTEGER that fits in an int64. It is nil otherwise.
 	InvokeID *int64
 
 	// Dialogue and Components are set when ComponentIndex is nonnegative:
@@ -181,8 +176,9 @@ type ParseError struct {
 	// it is the failure of that dialogue portion or of the component that
 	// ComponentIndex designates, not of anything that follows. When it is
 	// the transaction portion, it is what ended the decoding of the message,
-	// which can lie in any portion, after ErrUnrecognizedMessageType and a
-	// decode limit met only while inspecting the message, if any.
+	// which can lie in any portion: the codec's *wire.DecodeError, after
+	// ErrUnrecognizedMessageType and a decode limit met only while
+	// inspecting the message, if any.
 	Err error
 }
 

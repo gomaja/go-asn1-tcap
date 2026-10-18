@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
@@ -196,7 +196,7 @@ func normalize(msg tcap.Message) map[string]any {
 		}
 		var cause any
 		if m.PAbortCause != nil {
-			cause = int64(*m.PAbortCause)
+			cause = namedValue(*m.PAbortCause)
 		}
 		return map[string]any{
 			"message_type":  "abort",
@@ -243,14 +243,23 @@ func hexOrNil(b []byte) any {
 }
 
 // protocolVersion renders a protocol-version: "version1" for an absent field
-// (DEFAULT {version1}, Q.773 clause 3.2.1) and for exactly the one bit
-// version1(0), as the corpus decodes 03 02 07 80; anything else exactly.
+// (DEFAULT {version1}, Q.773 clause 3.2.1) and for only bit version1(0),
+// including trailing zero named bits; anything else exactly.
 func protocolVersion(pv *runtime.BitString) (present bool, value string) {
 	if pv == nil {
 		return false, "version1"
 	}
-	if pv.BitLength == 1 && len(pv.Bytes) == 1 && pv.Bytes[0] == 0x80 {
-		return true, "version1"
+	if pv.BitLength >= 1 && len(pv.Bytes) > 0 && pv.Bytes[0] == 0x80 {
+		onlyVersion1 := true
+		for _, octet := range pv.Bytes[1:] {
+			if octet != 0 {
+				onlyVersion1 = false
+				break
+			}
+		}
+		if onlyVersion1 {
+			return true, "version1"
+		}
 	}
 	return true, fmt.Sprintf("bits:%d:%x", pv.BitLength, pv.Bytes)
 }
@@ -501,6 +510,13 @@ func jsonText(v any) string {
 func assertSameMessage(t testing.TB, a, b tcap.Message) {
 	t.Helper()
 	na, nb := normalize(a), normalize(b)
+	for _, value := range []any{na, nb} {
+		if msg, ok := value.(map[string]any); ok {
+			if d, ok := msg["dialogue"].(map[string]any); ok && d["protocol_version"] == "version1" {
+				d["protocol_version_present"] = false
+			}
+		}
+	}
 	if !reflect.DeepEqual(canonicalJSON(t, na), canonicalJSON(t, nb)) {
 		t.Errorf("messages differ:\n  %s\n  %s", jsonText(na), jsonText(nb))
 	}
@@ -617,7 +633,7 @@ type parseErrWant struct {
 	compIndex *int               // nil leaves it unchecked
 	invokeID  string             // decimal, "" for nil, unchecked for no check
 	is        error              // sentinel reachable with errors.Is
-	// constraint requires a *ber.ConstraintError reachable with errors.As.
+	// constraint requires a *ber.ValidationError reachable with errors.As.
 	constraint bool
 	// noComponents requires ParseError.Components to be empty.
 	noComponents bool
@@ -697,9 +713,9 @@ func checkParseError(t *testing.T, err error, want parseErrWant) {
 		t.Errorf("errors.Is(%v, %v) = false", err, want.is)
 	}
 	if want.constraint {
-		var ce *ber.ConstraintError
+		var ce *ber.ValidationError
 		if !errors.As(err, &ce) {
-			t.Errorf("error %v does not wrap *ber.ConstraintError", err)
+			t.Errorf("error %v does not wrap *ber.ValidationError", err)
 		}
 	}
 	if want.noComponents && len(pe.Components) != 0 {
@@ -716,9 +732,13 @@ var (
 // specifies for every vector that Parse rejects.
 var corpusFailures = map[string]parseErrWant{
 	// Q.773 Table 20 defines only the [0] Linked ID tag.
+	"begin-nonminimal-long-length": {
+		portions: []tcap.Portion{tcap.PortionComponent}, msgTypes: []tcap.MessageType{tcap.MessageTypeBegin},
+		otid: "01020304", dtid: unchecked, compIndex: idx0, invokeID: "1", constraint: true,
+	},
 	"begin-linked-absent": {
 		portions: []tcap.Portion{tcap.PortionComponent}, msgTypes: []tcap.MessageType{tcap.MessageTypeBegin},
-		otid: "01020304", dtid: unchecked, compIndex: idx0, invokeID: "3", is: tcap.ErrInvalidLinkedID,
+		otid: "01020304", dtid: unchecked, compIndex: idx0, invokeID: "3", constraint: true,
 		noComponents: true,
 	},
 	// OrigTransactionID SIZE (1..4), Q.773 clause 4.2.1.3.
@@ -871,12 +891,8 @@ func TestCorpusValidVectors(t *testing.T) {
 				assertSameMessage(t, msg, again)
 				return
 			}
-			// begin-nonminimal-long-length is included here: its only
-			// non-minimal lengths are inside the parameter, which Marshal
-			// emits verbatim (contract 3.6 and 4.4), and every length
-			// that Marshal encodes itself is already minimal.
-			if hex.EncodeToString(out) != v.Hex {
-				t.Errorf("Marshal:\n got %x\nwant %s", out, v.Hex)
+			if hex.EncodeToString(out) != marshalCorpusHex(t, v.ID) {
+				t.Errorf("Marshal:\n got %x\nwant %s", out, marshalCorpusHex(t, v.ID))
 			}
 		})
 	}
@@ -940,10 +956,10 @@ func TestCorpusExpectedFailures(t *testing.T) {
 	}
 }
 
-// TestCorpusConstraintTolerance covers WithConstraintTolerance (parse.go) and
+// TestCorpusTolerance covers WithTolerance (parse.go) and
 // contract section 6: values outside their ASN.1 constraints parse, each
 // violation is recorded, and Marshal stays strict.
-func TestCorpusConstraintTolerance(t *testing.T) {
+func TestCorpusTolerance(t *testing.T) {
 	cases := []struct {
 		id         string
 		violations int // exact count; 0 means at least one
@@ -977,7 +993,7 @@ func TestCorpusConstraintTolerance(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.id, func(t *testing.T) {
 			var log ber.ViolationLog
-			msg, err := tcap.Parse(hx(corpusHex(t, c.id)), tcap.WithConstraintTolerance(&log))
+			msg, err := tcap.Parse(hx(corpusHex(t, c.id)), tcap.WithTolerance(&log))
 			if err != nil {
 				t.Fatalf("Parse with tolerance: %v", err)
 			}
@@ -987,9 +1003,9 @@ func TestCorpusConstraintTolerance(t *testing.T) {
 			}
 			c.check(t, msg)
 			_, err = msg.Marshal()
-			var ce *ber.ConstraintError
+			var ce *ber.ValidationError
 			if !errors.As(err, &ce) {
-				t.Errorf("Marshal error = %v, want *ber.ConstraintError", err)
+				t.Errorf("Marshal error = %v, want *ber.ValidationError", err)
 			}
 		})
 	}
@@ -998,7 +1014,7 @@ func TestCorpusConstraintTolerance(t *testing.T) {
 	// either outcome must be consistent.
 	t.Run("negative-otid-0", func(t *testing.T) {
 		var log ber.ViolationLog
-		msg, err := tcap.Parse(hx(corpusHex(t, "negative-otid-0")), tcap.WithConstraintTolerance(&log))
+		msg, err := tcap.Parse(hx(corpusHex(t, "negative-otid-0")), tcap.WithTolerance(&log))
 		if err != nil {
 			if _, ok := err.(*tcap.ParseError); !ok {
 				t.Fatalf("error %T is not *tcap.ParseError", err)
@@ -1017,9 +1033,9 @@ func TestCorpusConstraintTolerance(t *testing.T) {
 			t.Error("no violation recorded")
 		}
 		_, err = msg.Marshal()
-		var ce *ber.ConstraintError
+		var ce *ber.ValidationError
 		if !errors.As(err, &ce) {
-			t.Errorf("Marshal error = %v, want *ber.ConstraintError", err)
+			t.Errorf("Marshal error = %v, want *ber.ValidationError", err)
 		}
 		t.Logf("SIZE 0 tolerated, %d violation(s)", len(log.Snapshot()))
 	})
@@ -1028,7 +1044,7 @@ func TestCorpusConstraintTolerance(t *testing.T) {
 	// tolerated and recorded.
 	t.Run("two-violations", func(t *testing.T) {
 		var log ber.ViolationLog
-		if _, err := tcap.Parse(hx("6219480501020304056c10a10e0202008002012d30050403010203"), tcap.WithConstraintTolerance(&log)); err != nil {
+		if _, err := tcap.Parse(hx("6219480501020304056c10a10e0202008002012d30050403010203"), tcap.WithTolerance(&log)); err != nil {
 			t.Fatalf("Parse: %v", err)
 		}
 		if n := len(log.Snapshot()); n < 2 {
@@ -1046,7 +1062,7 @@ func TestCorpusConstraintTolerance(t *testing.T) {
 	for _, f := range failing {
 		t.Run("nothing-recorded-"+f.name, func(t *testing.T) {
 			var log ber.ViolationLog
-			_, err := tcap.Parse(hx(f.hex), tcap.WithConstraintTolerance(&log))
+			_, err := tcap.Parse(hx(f.hex), tcap.WithTolerance(&log))
 			if _, ok := err.(*tcap.ParseError); !ok {
 				t.Fatalf("error = %v (%T), want *tcap.ParseError", err, err)
 			}

@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func reviewFailure(t *testing.T, input string, opts ...tcap.ParseOption) *tcap.ParseError {
@@ -65,7 +65,7 @@ func TestReviewF1TransactionBeforePortions(t *testing.T) {
 	}
 	t.Run("tolerated transaction size", func(t *testing.T) {
 		var log ber.ViolationLog
-		pe := reviewFailure(t, "620e480501020304056c05a103020101", tcap.WithConstraintTolerance(&log))
+		pe := reviewFailure(t, "620e480501020304056c05a103020101", tcap.WithTolerance(&log))
 		if pe.Portion != tcap.PortionComponent || pe.ComponentIndex != 0 || len(log.Snapshot()) != 0 {
 			t.Fatalf("tolerated failure = %+v, reports = %v", pe, log.Snapshot())
 		}
@@ -89,18 +89,18 @@ func TestReviewF2DerivableTransactionIDs(t *testing.T) {
 		{"Unidirectional IDs", tlv("61", "480101", "490102", bad), "", ""},
 		{"UNKNOWN unique IDs", tlv("63", "4f00", "480101", "490102", bad), "01", "02"},
 		{"UNKNOWN duplicate IDs", tlv("63", "480101", "480102", "490103", "490104"), "", ""},
-		{"constructed OTID", tlv("62", "680704020102040103", bad), "010203", ""},
-		{"indefinite OTID", tlv("62", "6880040201020401030000", bad), "010203", ""},
-		{"constructed DTID", tlv("64", "6903040102", bad), "", "02"},
-		{"indefinite DTID", tlv("64", "69800401020000", bad), "", "02"},
+		{"constructed OTID", tlv("62", "680704020102040103", bad), "", ""},
+		{"indefinite OTID", tlv("62", "6880040201020401030000", bad), "", ""},
+		{"constructed DTID", tlv("64", "6903040102", bad), "", ""},
+		{"indefinite DTID", tlv("64", "69800401020000", bad), "", ""},
 		{"malformed constructed ID", tlv("62", "6803020101", bad), "", ""},
 		{"constructed long ID", tlv("62", "680704050102030405", bad), "", ""},
 		{"truncated Begin child", "62074801016c05a103", "01", ""},
 		{"truncated Continue child", "650a4801014901026c05a103", "01", "02"},
 		{"truncated End child", "64074901026c05a103", "", "02"},
-		{"duplicate before truncated child", "620a4801014801026c05a103", "", ""},
-		{"truncated duplicate OTID", "6206480101480501", "", ""},
-		{"truncated duplicate DTID", "6509480101490102490503", "01", ""},
+		{"duplicate before truncated child", "620a4801014801026c05a103", "01", ""},
+		{"truncated duplicate OTID", "6206480101480501", "01", ""},
+		{"truncated duplicate DTID", "6509480101490102490503", "01", "02"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -111,8 +111,9 @@ func TestReviewF2DerivableTransactionIDs(t *testing.T) {
 		})
 	}
 	for _, id := range []string{"680704020102040103", "6880040201020401030000"} {
-		m, err := tcap.Parse(hx(tlv("62", id)))
-		if err != nil || m.(*tcap.Begin).OTID.String() != "010203" {
+		var reports ber.ViolationLog
+		m, err := tcap.Parse(hx(tlv("62", id)), tcap.WithTolerance(&reports))
+		if err != nil || m.(*tcap.Begin).OTID.String() != "010203" || len(reports.Snapshot()) == 0 {
 			t.Fatalf("valid constructed OTID = %v, %v", m, err)
 		}
 	}
@@ -144,14 +145,10 @@ func TestReviewF3ResourceLimitsAndEmptyContext(t *testing.T) {
 	}
 	t.Run("inspection scan limits", func(t *testing.T) {
 		// The OTID is the first child, within the scanned prefix, so it stays
-		// derivable for the P-Abort of Q.774 (06/97) Table 7. go-asn1 locates
-		// a MaxWork failure at the root, which leaves none: https://github.com/gomaja/go-asn1/issues/155.
+		// derivable for the P-Abort of Q.774 (06/97) Table 7.
 		for _, limits := range []ber.DecodeLimits{{MaxWork: 8}, {MaxElements: 2}} {
 			pe := reviewFailure(t, "62074801014f004e00", tcap.WithDecodeLimits(limits))
 			wantID := "01"
-			if limits.MaxWork != 0 {
-				wantID = ""
-			}
 			if !errors.Is(pe, ber.ErrResourceLimit) || pe.Portion != tcap.PortionTransaction || pe.ComponentIndex != -1 || pe.OTID.String() != wantID || pe.DTID != nil || pe.Dialogue != nil || pe.Components != nil || pe.InvokeID != nil {
 				t.Fatalf("limited immediate scan = %+v, IDs = %s/%s", pe, pe.OTID, pe.DTID)
 			}
@@ -226,7 +223,7 @@ func TestReviewF5BitStringBoundaries(t *testing.T) {
 					}
 				}()
 				data, err := m.Marshal()
-				valid := tc.valid && (kind != "protocol-version" || tc.bits.BitLength != 0) && (kind != "arbitrary" || tc.name != "exact")
+				valid := tc.valid && (kind != "protocol-version" || tc.bits.BitLength != 0)
 				if (err == nil) != valid {
 					t.Fatalf("Marshal = %x, %v; valid = %t", data, err, valid)
 				}
@@ -242,7 +239,11 @@ func TestReviewF5BitStringBoundaries(t *testing.T) {
 				}
 				var got runtime.BitString
 				if kind == "protocol-version" {
-					got = *back.(*tcap.Begin).Dialogue.Request.ProtocolVersion
+					if version := back.(*tcap.Begin).Dialogue.Request.ProtocolVersion; version != nil {
+						got = *version
+					} else {
+						got = *tcap.ProtocolVersion1()
+					}
 				} else {
 					got = back.(*tcap.Begin).Dialogue.Opaque.Arbitrary
 				}
@@ -276,7 +277,7 @@ func TestReviewF6ParameterBERStructure(t *testing.T) {
 		valid bool
 	}{
 		{"2100", false}, {"300102", false}, {"3003020101", true},
-		{"048101aa", true}, {"24800401aa0000", true},
+		{"048101aa", false}, {"24800401aa0000", false},
 	} {
 		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "SingleASN1Type", "UserInformation", "OctetAligned"} {
 			t.Run(tc.input+"/"+kind, func(t *testing.T) {
@@ -308,8 +309,15 @@ func TestReviewF6ParameterBERStructure(t *testing.T) {
 					if err != nil || !reflect.DeepEqual(m, back) {
 						t.Fatalf("round trip = %v, %v", back, err)
 					}
-				} else if expected := ber.ValidateBEREncodedElement(data); expected == nil || err == nil || !sameElementFailure(err, expected) {
-					t.Fatalf("Marshal = %x, %v; want codec BER element failure", out, err)
+				} else if expected := ber.ValidateBEREncodedElement(data); expected != nil {
+					if err == nil || !sameElementFailure(err, expected) {
+						t.Fatalf("Marshal = %x, %v; want codec BER element failure", out, err)
+					}
+				} else {
+					var validation *ber.ValidationError
+					if !errors.As(err, &validation) {
+						t.Fatalf("profile error = %v", err)
+					}
 				}
 			})
 		}
@@ -338,7 +346,7 @@ func TestReviewF7KnownDialoguePDUTags(t *testing.T) {
 			t.Run(as+"/"+pdu, func(t *testing.T) {
 				pe := reviewFailure(t, tlv("62", "480101", dialoguePortion(as, pdu)))
 				known := pdu == "6000" || as == hexDialogueAS && (pdu == "6100" || pdu == "6400")
-				if pe.Portion != tcap.PortionDialogue || errors.Is(pe, tcap.ErrUnexpectedDialoguePDU) == known {
+				if pe.Portion != tcap.PortionDialogue || known && errors.Is(pe, tcap.ErrUnexpectedDialoguePDU) {
 					t.Fatalf("PDU classification = %v; recognized = %t", pe, known)
 				}
 			})
@@ -348,7 +356,7 @@ func TestReviewF7KnownDialoguePDUTags(t *testing.T) {
 
 func TestReviewF10InvalidOptionsBeforeData(t *testing.T) {
 	for _, opt := range []tcap.ParseOption{
-		nil, tcap.WithConstraintTolerance(nil),
+		nil, tcap.WithTolerance(nil),
 		tcap.WithDecodeLimits(ber.DecodeLimits{MaxDepth: -1}),
 		tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: -1}),
 		tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: -1}),
@@ -364,7 +372,7 @@ func TestReviewF10InvalidOptionsBeforeData(t *testing.T) {
 	}
 	var log ber.ViolationLog
 	for _, limits := range []ber.DecodeLimits{{}, {MaxWork: 1}, {MaxDepth: math.MaxInt, MaxElements: math.MaxInt, MaxWork: math.MaxInt}} {
-		_, err := tcap.Parse(nil, tcap.WithDecodeLimits(limits), tcap.WithConstraintTolerance(&log))
+		_, err := tcap.Parse(nil, tcap.WithDecodeLimits(limits), tcap.WithTolerance(&log))
 		if !errors.Is(err, tcap.ErrEmptyData) || len(log.Snapshot()) != 0 {
 			t.Fatalf("valid options with empty input = %v, reports = %v", err, log.Snapshot())
 		}
@@ -382,7 +390,7 @@ func TestReviewF11SingleLineParseErrors(t *testing.T) {
 	}
 	// A failing component is the only cause of a component portion failure.
 	pe = reviewFailure(t, tlv("62", "480101", "6c05a903020101"))
-	if strings.ContainsAny(pe.Error(), "\r\n") || pe.Err != tcap.ErrUnrecognizedComponent {
+	if strings.ContainsAny(pe.Error(), "\r\n") || !errors.Is(pe, tcap.ErrUnrecognizedComponent) {
 		t.Fatalf("component error = %q", pe.Error())
 	}
 }

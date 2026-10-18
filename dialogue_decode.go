@@ -1,50 +1,20 @@
 package tcap
 
 import (
-	"fmt"
 	"slices"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
-	"github.com/gomaja/go-asn1/runtime/tag"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 )
 
 // ITU-T Q.773 (06/97) clauses 3.2 and 4.2.3 identify known dialogue PDUs.
 // An invalid known syntax never becomes opaque user data.
-func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeOption) (*Dialogue, error) {
+func decodeDialogue(dp *wire.DialoguePortion, mt MessageType) (*Dialogue, error) {
 	if dp == nil {
 		return nil, nil
 	}
-	e := runtime.External(*dp)
-	structured := e.DirectReference == wire.DialogueAsId()
-	uni := e.DirectReference == wire.UniDialogueAsId()
-	if !structured && !uni {
-		x, err := decodeExternal(e)
-		if err != nil {
-			return nil, err
-		}
-		return &Dialogue{Opaque: &x}, nil
-	}
-	data, err := externalData(e)
-	if err != nil {
-		return nil, err
-	}
-	// Q.773 clause 3.2 defines only AARQ [0], AARE [1] and ABRT [4]
-	// under dialogue-as-id, and only AUDT [0] under uniDialogue-as-id.
-	t, err := ber.PeekTag(data)
-	if err != nil {
-		return nil, err
-	}
-	if t.Class != tag.ClassApplication || !t.Constructed || t.Number != 0 && (uni || t.Number != 1 && t.Number != 4) {
-		return nil, ErrUnexpectedDialoguePDU
-	}
 	var d Dialogue
-	if uni {
-		var p wire.UniDialoguePDU
-		if err := p.UnmarshalBER(data, opts...); err != nil {
-			return nil, err
-		}
+	if p, ok := dp.UniDialogue(); ok {
 		w := p.UnidialoguePDU
 		acn, err := decodeOID(w.ApplicationContextName)
 		if err != nil {
@@ -59,11 +29,7 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeO
 			v.UserInformation = ui
 		}
 		d.Unidirectional = v
-	} else {
-		var p wire.DialoguePDU
-		if err := p.UnmarshalBER(data, opts...); err != nil {
-			return nil, err
-		}
+	} else if p, ok := dp.Dialogue(); ok {
 		switch {
 		case p.DialogueRequest != nil:
 			w := p.DialogueRequest
@@ -110,28 +76,22 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType, opts []ber.DecodeO
 		default:
 			return nil, ErrUnexpectedDialoguePDU
 		}
+	} else {
+		e, err := dp.External()
+		if err != nil {
+			return nil, err
+		}
+		x, err := decodeExternal(e)
+		if err != nil {
+			return nil, err
+		}
+		d.Opaque = &x
 	}
 	// Q.774 Table 3 and clause 3.2.3; provider ABRT user information is accepted.
 	if err := validateDialogue(&d, mt, false); err != nil {
 		return nil, err
 	}
 	return &d, nil
-}
-
-// ITU-T X.690 (02/2021) clause 8.18 permits three data-value encodings.
-// A known TCAP PDU carried as arbitrary bits must comprise whole octets.
-func externalData(e runtime.External) ([]byte, error) {
-	switch e.Encoding {
-	case runtime.ExternalSingleASN1Type:
-		return e.SingleASN1Type.Bytes, nil
-	case runtime.ExternalOctetAligned:
-		return e.OctetAligned, nil
-	case runtime.ExternalArbitrary:
-		if e.Arbitrary.BitLength >= 0 && e.Arbitrary.BitLength%8 == 0 && e.Arbitrary.BitLength/8 == len(e.Arbitrary.Bytes) {
-			return e.Arbitrary.Bytes, nil
-		}
-	}
-	return nil, fmt.Errorf("%w: known dialogue syntax requires whole octets", ErrExternalEncoding)
 }
 
 func decodeExternal(e runtime.External) (External, error) {
