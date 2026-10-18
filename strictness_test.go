@@ -126,9 +126,9 @@ func TestCodecOwnsComponentIDRules(t *testing.T) {
 	}
 }
 
-// Missing Prefix cases are tracked in https://github.com/gomaja/go-asn1/issues/161.
-// Tolerated ID cases are tracked in https://github.com/gomaja/go-asn1/issues/162.
-func TestParseUpstreamPrefixGaps(t *testing.T) {
+// Parse uses the codec's accepted IDs, including tolerated values and
+// failures without a recognized message type (Q.774 (06/97) Table 7).
+func TestParseAcceptedPrefixIDs(t *testing.T) {
 	for _, tc := range []struct {
 		name, input, otid, dtid string
 		tolerant                bool
@@ -153,12 +153,12 @@ func TestParseUpstreamPrefixGaps(t *testing.T) {
 			var w wire.TCMessage
 			codecErr := w.UnmarshalBER(data, wireOpts...)
 			var decoded *wire.DecodeError
-			if !errors.As(codecErr, &decoded) || decoded.Prefix.Otid != nil {
-				t.Fatalf("upstream gap expectation: %v", codecErr)
+			if !errors.As(codecErr, &decoded) || decoded.Prefix.Otid == nil || tcap.TransactionID(*decoded.Prefix.Otid).String() != tc.otid {
+				t.Fatalf("codec accepted prefix: %v", codecErr)
 			}
 			_, err := tcap.Parse(data, opts...)
 			var pe *tcap.ParseError
-			if !errors.As(err, &pe) || pe.OTID == nil || pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid {
+			if !errors.As(err, &pe) || pe.OTID == nil || pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid || !bytes.Equal(pe.OTID, *decoded.Prefix.Otid) {
 				t.Fatalf("missing abnormal-procedure IDs: %v", err)
 			}
 		})
@@ -199,11 +199,15 @@ func TestParseInspectionKeepsTolerance(t *testing.T) {
 }
 
 func TestParseStrictTransactionFailure(t *testing.T) {
-	for _, input := range []string{"620448810101", "6208488101016c020000", "6281084801016c03a10100"} {
-		_, err := tcap.Parse(hx(input))
+	for _, tc := range []struct{ input, otid string }{
+		{"620448810101", ""},
+		{"6208488101016c020000", ""},
+		{"6281084801016c03a10100", "01"},
+	} {
+		_, err := tcap.Parse(hx(tc.input))
 		var pe *tcap.ParseError
 		var validation *ber.ValidationError
-		if !errors.As(err, &pe) || !errors.As(err, &validation) || pe.OTID != nil || pe.Portion != tcap.PortionTransaction {
+		if !errors.As(err, &pe) || !errors.As(err, &validation) || pe.OTID.String() != tc.otid || (pe.OTID == nil) != (tc.otid == "") || pe.Portion != tcap.PortionTransaction {
 			t.Fatalf("strict transaction context: %v; %#v", err, pe)
 		}
 	}

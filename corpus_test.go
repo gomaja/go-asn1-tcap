@@ -891,8 +891,8 @@ func TestCorpusValidVectors(t *testing.T) {
 				assertSameMessage(t, msg, again)
 				return
 			}
-			if hex.EncodeToString(out) != marshalCorpusHex(t, v.ID) {
-				t.Errorf("Marshal:\n got %x\nwant %s", out, marshalCorpusHex(t, v.ID))
+			if hex.EncodeToString(out) != corpusHex(t, v.ID) {
+				t.Errorf("Marshal:\n got %x\nwant %s", out, corpusHex(t, v.ID))
 			}
 		})
 	}

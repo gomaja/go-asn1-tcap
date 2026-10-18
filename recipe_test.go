@@ -13,8 +13,7 @@ import (
 
 // TestRecipeEncodings places each recipe in a message with the transaction
 // IDs of a corpus vector. The field values are those of ITU-T Q.774
-// (06/97) clauses 3.2.1, 3.2.2.1 and 3.2.3. Marshal omits DEFAULT
-// protocol-version: https://github.com/gomaja/go-asn1/issues/164.
+// (06/97) clauses 3.2.1, 3.2.2.1 and 3.2.3.
 func TestRecipeEncodings(t *testing.T) {
 	acnNotSupported := tcap.ResultSourceDiagnostic{
 		DialogueServiceUser: ptr(wire.AssociateSourceDiagnosticDialogueServiceUserValueApplicationContextNameNotSupportedValue()),
@@ -27,31 +26,30 @@ func TestRecipeEncodings(t *testing.T) {
 		msg  tcap.Message
 		want string
 	}{
-		// AARE 61 17: ACN 0.4.0.0.1.0.20.2, result 1,
-		// dialogue-service-user 2, default protocol-version omitted.
+		// AARE 61 1b: ACN 0.4.0.0.1.0.20.2, result 1,
+		// dialogue-service-user 2, explicit protocol-version {version1}.
 		{"reject, application context name not supported", &tcap.Abort{DTID: tidD, Dialogue: tcap.NewRejectDialogue("0.4.0.0.1.0.20.2", acnNotSupported, nil)},
-			marshalCorpusHex(t, "abort-aare-map-version-fallback")},
+			corpusHex(t, "abort-aare-map-version-fallback")},
 		// Q.774 clause 3.2.3: the received ACN, dialogue-service-provider
 		// no-common-dialogue-portion (a3 05 a2 03 02 01 02), no user information.
 		{"reject, no common dialogue portion", &tcap.Abort{DTID: tidD, Dialogue: tcap.NewRejectDialogue(acn3, noCommonDialoguePortion, nil)},
-			marshalCorpusHex(t, "abort-aare-provider-no-common-dialogue")},
+			corpusHex(t, "abort-aare-provider-no-common-dialogue")},
 		// ABRT 64 03 80 01 01.
 		{"provider abort", &tcap.Abort{DTID: tidD, Dialogue: tcap.NewProviderAbortDialogue()},
-			marshalCorpusHex(t, "abort-abrt-provider")},
+			corpusHex(t, "abort-abrt-provider")},
 		// ABRT 64 16 80 01 00 be 11 ...
 		{"user abort with MAP user information", &tcap.Abort{DTID: tidD, Dialogue: tcap.NewUserAbortDialogue([]tcap.External{mapUserAbortExt()})},
-			marshalCorpusHex(t, "abort-abrt-user-map-userabort")},
+			corpusHex(t, "abort-abrt-user-map-userabort")},
 		{"user abort without user information", &tcap.Abort{DTID: tidD, Dialogue: tcap.NewUserAbortDialogue(nil)},
 			tlv("67", hexDTID, dialoguePortion(hexDialogueAS, hexABRTUser))},
-		// AARE 61 17 with result 0 and dialogue-service-user null.
+		// AARE 61 1b with result 0 and dialogue-service-user null.
 		{"accept in the first backward Continue", &tcap.Continue{OTID: tidO, DTID: tidD, Dialogue: tcap.NewAcceptDialogue(acn3, nil), Components: []tcap.Component{
 			{ReturnResultLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(45), Parameter: hx("30040402aabb")}}},
-		}}, marshalCorpusHex(t, "continue-first-backward-aare-result")},
-		// Marshal omits DEFAULT protocol-version in both End and Continue: https://github.com/gomaja/go-asn1/issues/164.
+		}}, corpusHex(t, "continue-first-backward-aare-result")},
 		{"accept in an End", &tcap.End{DTID: tidD, Dialogue: tcap.NewAcceptDialogue(acn3, nil)},
-			tlv("64", hexDTID, dialoguePortion(hexDialogueAS, hexAAREAccDefault))},
+			tlv("64", hexDTID, dialoguePortion(hexDialogueAS, hexAAREAcc))},
 		{"accept with user information", &tcap.End{DTID: tidD, Dialogue: tcap.NewAcceptDialogue(acn3, []tcap.External{mapUserAbortExt()})},
-			tlv("64", hexDTID, dialoguePortion(hexDialogueAS, tlv("61", hexACN3, "a203020100", "a305a103020100", tlv("be", "280f060704000001010101a004a4028000"))))},
+			tlv("64", hexDTID, dialoguePortion(hexDialogueAS, tlv("61", hexPV1, hexACN3, "a203020100", "a305a103020100", tlv("be", "280f060704000001010101a004a4028000"))))},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -142,7 +140,7 @@ func TestRecipeFields(t *testing.T) {
 	// The accepted AARE of corpus end-aare-single-response differs from the
 	// recipe only in leaving out protocol-version.
 	t.Run("end-aare-single-response", func(t *testing.T) {
-		d := messageDialogue(mustParse(t, marshalCorpusHex(t, "end-aare-single-response")))
+		d := messageDialogue(mustParse(t, corpusHex(t, "end-aare-single-response")))
 		recipe := tcap.NewAcceptDialogue(acn3, nil)
 		if d == nil || d.Response == nil || d.Response.ProtocolVersion != nil {
 			t.Fatalf("dialogue %s", jsonText(normDialogue(d)))

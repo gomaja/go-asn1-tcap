@@ -41,7 +41,10 @@ func WithDecodeLimits(limits ber.DecodeLimits) ParseOption {
 //
 // It returns a *Begin, *Continue, *End, *Abort or *Unidirectional. Every
 // error caused by the data is a *ParseError; an invalid option returns an
-// error wrapping ErrInvalidParseOption. The returned message does not alias data.
+// error wrapping ErrInvalidParseOption. On a codec failure, transaction IDs
+// come from wire.DecodeError.Prefix under the active options; inspection
+// identifies the failing portion for ITU-T Q.774 (06/97) clause 3.2.2.
+// The returned message and error context do not alias data.
 func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) {
 	config := parseConfig{}
 	for _, opt := range opts {
@@ -84,13 +87,13 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 		pe := inspectFailure(data, decodeOpts, errors.Is(err, ber.ErrResourceLimit), limits, err)
 		// Err describes the element that Portion and ComponentIndex
 		// designate: a dialogue portion or component that inspection found
-		// failing, whatever the codec met later, or else the message.
+		// failing, or else the message failure reported by the codec.
 		if pe.Portion == PortionTransaction || pe.Err == nil {
 			pe.Err = joinErrors(pe.Err, err)
 		}
 		var failure *wire.DecodeError
 		if errors.As(err, &failure) {
-			decodeFailureIDs(pe, failure, data, decodeOpts, limits)
+			decodeFailureIDs(pe, failure)
 		}
 		return nil, pe
 	}

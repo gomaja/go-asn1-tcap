@@ -47,8 +47,10 @@
 // values outside ASN.1 constraints, and records each violation in the
 // ber.ViolationLog when Parse succeeds. Both modes enforce Q.774 Table 3:
 // AARQ only in Begin; AARE with result accepted in Continue or End; AARE with
-// another result, or ABRT, in Abort; AUDT only in Unidirectional; Opaque in
-// any message. Rules that depend on transaction or dialogue state (for
+// another result, or ABRT, in Abort; AUDT only in Unidirectional. Strict
+// decoding and Marshal accept Opaque only in Continue, End and Abort;
+// WithTolerance also accepts it in Begin and Unidirectional and records a
+// violation. Rules that depend on transaction or dialogue state (for
 // example that an AARE only appears in the first backward Continue) are left
 // to the TCAP stack.
 //
@@ -81,21 +83,24 @@
 // where one is required returns ErrMissingInvokeID or ErrInvalidLinkedID.
 //
 // When the codec cannot decode a message, Parse inspects it for the context
-// that Q.774 clauses 3.2.2 and 3.3.4 and Tables 5 and 7 need: the transaction
-// IDs, taken from the codec's *wire.DecodeError where it has them, and the
-// first failing dialogue portion or component. Inspection stays within the
-// decode limits. The ParseError's Err is the failure of that dialogue portion
-// or component, or else the codec's *wire.DecodeError.
+// that Q.774 clauses 3.2.2 and 3.3.4 and Tables 5 and 7 need: the first
+// failing dialogue portion or component. Transaction IDs are copied
+// from the codec's *wire.DecodeError.Prefix, which holds the IDs it accepted
+// under the active options, including when a duplicate follows or the
+// message's header fails validation. Inspection stays within the decode limits.
+// ParseError.Err is the failure of that dialogue portion or component, or
+// else the codec's *wire.DecodeError.
 //
 // The codec decodes the dialogue-as and uniDialogue-as abstract syntaxes into
 // AARQ, AARE, ABRT and AUDT; a dialogue portion in any other abstract syntax
-// is an Opaque EXTERNAL. The codec also applies Q.773 clause 4.2.3: a
-// Unidirectional carries AUDT, and the other messages do not. Under
-// WithTolerance, Parse accepts a Unidirectional with an Opaque dialogue
-// portion and records the violation. When Marshal encodes an AARQ, AARE or
-// AUDT, it leaves out a protocol-version equal to {version1}, its DEFAULT.
-// When it encodes a BIT STRING, it clears the unused bits of the last octet
-// without changing the caller's value.
+// is an Opaque EXTERNAL. The codec requires uniDialogue-as with AUDT in a
+// Unidirectional (Q.773 clause 4.2.3) and dialogue control syntax in a Begin
+// (Q.774 Figure A.5, sheet 3). Other messages may carry user information in
+// another abstract syntax. When Marshal encodes an AARQ, AARE or AUDT, a nil
+// protocol-version is omitted and means the DEFAULT {version1}; a non-nil
+// value is encoded, including ProtocolVersion1(). When it encodes a BIT
+// STRING, it clears the unused bits of the last octet without changing the
+// caller's value (X.690 (02/2021) clause 8.6.2.4).
 //
 // The values of TCAP protocol elements (P-Abort causes, problem codes,
 // associate results and diagnostics, abort sources) are the generated types

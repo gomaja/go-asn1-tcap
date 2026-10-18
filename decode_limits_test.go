@@ -1,9 +1,9 @@
 package tcap_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
@@ -33,37 +33,34 @@ func TestParseDerivableIDsMatchCodecLimitLocations(t *testing.T) {
 						}
 						var reports ber.ViolationLog
 						opts := []ber.DecodeOption{ber.WithDecodeLimits(limits), ber.WithTolerance(&reports)}
-						validation := ber.ValidateBERElement(data, opts...)
 						var w wire.TCMessage
 						decoded := w.UnmarshalBER(data, opts...)
-						if !errors.Is(validation, ber.ErrResourceLimit) {
-							if errors.Is(decoded, ber.ErrResourceLimit) {
-								t.Fatalf("typed-only limit: %v", decoded)
+						var failure *wire.DecodeError
+						if !errors.Is(decoded, ber.ErrResourceLimit) {
+							if _, err := tcap.Parse(data, tcap.WithDecodeLimits(limits), tcap.WithTolerance(&ber.ViolationLog{})); err != nil {
+								t.Fatalf("codec succeeded but Parse failed: %v", err)
 							}
 							return
 						}
-						var vloc, dloc *ber.ElementError
-						if !errors.Is(decoded, ber.ErrResourceLimit) || !errors.As(validation, &vloc) || !errors.As(decoded, &dloc) || vloc.Offset() != dloc.Offset() || !reflect.DeepEqual(vloc.ChildIndexes(), dloc.ChildIndexes()) {
-							t.Fatalf("preflight %v / typed %v", validation, decoded)
+						if !errors.As(decoded, &failure) {
+							t.Fatalf("codec limit without DecodeError: %v", decoded)
 						}
 						_, err := tcap.Parse(data, tcap.WithDecodeLimits(limits), tcap.WithTolerance(&ber.ViolationLog{}))
 						var pe *tcap.ParseError
 						if !errors.As(err, &pe) || !errors.Is(err, ber.ErrResourceLimit) {
 							t.Fatalf("Parse: %v", err)
 						}
-						cutoff := 0
-						if indexes := vloc.ChildIndexes(); len(indexes) > 0 {
-							cutoff = indexes[0]
+						// Q.774 (06/97) Table 7 leaves derivability to the implementation.
+						// A root failure may carry IDs accepted by the codec's probe.
+						var wantO, wantD []byte
+						if failure.Prefix.Otid != nil {
+							wantO = *failure.Prefix.Otid
 						}
-						var wantO, wantD string
-						if cutoff > 0 {
-							wantO = "01"
+						if failure.Prefix.Dtid != nil {
+							wantD = *failure.Prefix.Dtid
 						}
-						if cutoff > 1 {
-							wantD = "02"
-						}
-						if pe.OTID.String() != wantO || pe.DTID.String() != wantD {
-							t.Fatalf("IDs %s/%s, want %s/%s before %v at %d", pe.OTID, pe.DTID, wantO, wantD, vloc.ChildIndexes(), vloc.Offset())
+						if !bytes.Equal(pe.OTID, wantO) || !bytes.Equal(pe.DTID, wantD) || (pe.OTID == nil) != (failure.Prefix.Otid == nil) || (pe.DTID == nil) != (failure.Prefix.Dtid == nil) {
+							t.Fatalf("IDs %s/%s, want codec Prefix %x/%x", pe.OTID, pe.DTID, wantO, wantD)
 						}
 					})
 				}

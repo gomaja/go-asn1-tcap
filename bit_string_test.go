@@ -11,6 +11,13 @@ import (
 	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
+func externalBitsMessage(place string, d *tcap.Dialogue) tcap.Message {
+	if place == "opaque" {
+		return &tcap.End{DTID: tcap.TransactionID{1}, Dialogue: d}
+	}
+	return &tcap.Begin{OTID: tcap.TransactionID{1}, Dialogue: d}
+}
+
 func TestMarshalRejectsInvalidExternalBitStrings(t *testing.T) {
 	for _, bits := range []runtime.BitString{{Bytes: []byte{0x80, 0}, BitLength: 1}, {Bytes: []byte{1}, BitLength: 0}, {Bytes: []byte{0x80}, BitLength: 9}, {Bytes: []byte{0x80}, BitLength: -1}} {
 		for _, place := range []string{"opaque", "user information"} {
@@ -21,7 +28,7 @@ func TestMarshalRejectsInvalidExternalBitStrings(t *testing.T) {
 					d = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{ext}}}
 				}
 				before := bytes.Clone(bits.Bytes)
-				_, err := (&tcap.Begin{OTID: tcap.TransactionID{1}, Dialogue: d}).Marshal()
+				_, err := externalBitsMessage(place, d).Marshal()
 				if !errors.Is(err, ber.ErrInvalidValue) {
 					t.Fatalf("invalid caller BIT STRING: %v", err)
 				}
@@ -43,7 +50,7 @@ func TestMarshalClearsUnusedExternalBits(t *testing.T) {
 			if place == "user information" {
 				d = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{ext}}}
 			}
-			encoded, err := (&tcap.Begin{OTID: tcap.TransactionID{1}, Dialogue: d}).Marshal()
+			encoded, err := externalBitsMessage(place, d).Marshal()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -62,7 +69,7 @@ func TestMarshalClearsUnusedExternalBits(t *testing.T) {
 
 func TestParseRemarshalsReceivedUnusedBits(t *testing.T) {
 	for _, text := range []string{
-		tlv("62", "480101", tlv("6b", "280706012a820207ff")),
+		tlv("64", "490101", tlv("6b", "280706012a820207ff")),
 		tlv("62", "480101", dialoguePortion(hexDialogueAS, "6009800207ffa10306012a")),
 		tlv("62", "480101", dialoguePortion(hexDialogueAS, tlv("60", "80020780", "a10306012a", tlv("be", "280706012a820207ff")))),
 	} {

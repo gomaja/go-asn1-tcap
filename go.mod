@@ -2,7 +2,7 @@ module github.com/gomaja/go-asn1-tcap
 
 go 1.26.9
 
-require github.com/gomaja/go-asn1 v0.0.0-20261018080627-f1929f8072d4
+require github.com/gomaja/go-asn1 v0.0.0-20261018142225-5cfe59dbce90
 
 retract (
 	v1.0.2 // Published only to retract v1.0.0 and v1.0.1; depend on the main branch.

@@ -45,7 +45,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		return pe
 	}
 	if err != nil {
-		value, _ = inspectedContents(data)
+		value = inspectedContents(data)
 		_, tagBytes, tagErr := ber.DecodeTag(data)
 		if tagErr != nil {
 			return pe
@@ -55,7 +55,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			return pe
 		}
 	}
-	children, scanErr := scanChildren(value, false, limits)
+	children, scanErr := scanChildren(value, limits)
 	if err != nil || scanErr != nil {
 		// A component portion that cannot be delimited is inspected from the
 		// codec's location only where the scan stopped at it as well: a
@@ -73,7 +73,12 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	}
 	// Q.773 clause 3.1 and Tables 3-7 establish the transaction portion
 	// before Q.774 clause 3.2.2.2 permits inspection of the other portions.
-	if transactionOnly || pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, opts) {
+	var prefix wire.TransactionPrefix
+	var decoded *wire.DecodeError
+	if errors.As(failure, &decoded) {
+		prefix = decoded.Prefix
+	}
+	if pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, prefix, opts) {
 		return pe
 	}
 	var dialogue *Dialogue
@@ -81,7 +86,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		t, _, value, delimErr := ber.DecodeTLV(data, opts...)
 		if delimErr != nil {
 			t, _ = ber.PeekTag(data)
-			value, _ = inspectedContents(data)
+			value = inspectedContents(data)
 		}
 		switch t.Number {
 		case 11:
@@ -115,7 +120,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 					ct, _ = ber.PeekTag(value)
 					pe.Portion, pe.ComponentIndex, pe.ComponentType, pe.Err = PortionComponent, index, inspectedComponentType(ct), err
 					if ct.Constructed {
-						contents, _ := inspectedContents(value)
+						contents := inspectedContents(value)
 						pe.InvokeID = derivableInvokeID(contents, opts)
 					}
 					pe.Dialogue, pe.Components = dialogue, prefix
@@ -250,14 +255,11 @@ func locatedComponentPrefix(contents []byte, failure error, opts []ber.DecodeOpt
 }
 
 // messageChildren is what inspection keeps of the immediate children of a
-// message: the leading ones, their number, and each transaction ID element
-// with its position (Q.774 (06/97) Table 7).
+// message: the leading ones and their number, to establish the transaction
+// layout before inspecting dialogue and components (Q.773 (06/97) clause 3.1).
 type messageChildren struct {
 	leading [][]byte
 	count   int
-	ids     [2][]byte
-	idPos   [2]int
-	idCount [2]int
 }
 
 // A sound transaction portion has at most four elements (Q.773 (06/97) clause
@@ -265,28 +267,19 @@ type messageChildren struct {
 const leadingChildren = 5
 
 func (c *messageChildren) add(child []byte) {
-	if t, err := ber.PeekTag(child); err == nil && t.Class == tag.ClassApplication && (t.Number == 8 || t.Number == 9) {
-		c.idCount[t.Number-8]++
-		c.ids[t.Number-8], c.idPos[t.Number-8] = child, c.count
-	}
 	if c.count < leadingChildren {
 		c.leading = append(c.leading, child)
 	}
 	c.count++
 }
 
-// Q.774 Table 7 permits deriving IDs before a malformed later child.
-// The scan reads immediate children within the decode limits, including the
-// tag of a malformed final child so duplicate IDs remain underivable.
-// Indefinite contents end at their end-of-contents indicator (Q.773 clause
-// 4.1.2.3).
-func scanChildren(data []byte, indefinite bool, limits ber.DecodeLimits) (messageChildren, error) {
+// The scan reads immediate children within the decode limits to establish
+// the transaction layout (ITU-T Q.773 (06/97) clause 3.1), keeping a malformed
+// final child so that it cannot hide an invalid layout.
+func scanChildren(data []byte, limits ber.DecodeLimits) (messageChildren, error) {
 	var children messageChildren
 	budget := scanBudget{limits: limits, elements: 1}
 	for len(data) > 0 {
-		if indefinite && len(data) >= 2 && data[0] == 0 && data[1] == 0 {
-			break
-		}
 		n, err := budget.elementLength(data)
 		if errors.Is(err, ber.ErrResourceLimit) {
 			return children, err
@@ -361,27 +354,27 @@ func (b *scanBudget) elementLength(data []byte) (int, error) {
 }
 
 // inspectedContents returns the contents of a constructed element whose
-// complete TLV cannot be decoded, as far as its header allows, and whether
-// its length is indefinite.
-func inspectedContents(data []byte) ([]byte, bool) {
+// complete TLV cannot be decoded, as far as its header allows.
+func inspectedContents(data []byte) []byte {
 	_, tn, err := ber.DecodeTag(data)
 	if err != nil {
-		return nil, false
+		return nil
 	}
 	length, indefinite, ln, err := ber.DecodeLength(data[tn:])
 	if err != nil {
-		return nil, false
+		return nil
 	}
 	contents := data[tn+ln:]
 	if !indefinite && length < len(contents) {
 		contents = contents[:length]
 	}
-	return contents, indefinite
+	return contents
 }
 
 // ITU-T Q.773 (06/97) clause 3.1 and Tables 3-7 define immediate child order.
-// Transaction IDs admit the BER string forms of X.690 (02/2021) clause 8.7.
-func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOption) bool {
+// The codec's Prefix establishes acceptance of the required transaction IDs;
+// inspection checks their positions without decoding or validating them again.
+func soundTransaction(kept messageChildren, mt MessageType, prefix wire.TransactionPrefix, opts []ber.DecodeOption) bool {
 	if kept.count > len(kept.leading) {
 		return false
 	}
@@ -389,10 +382,19 @@ func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOpt
 	var required []int
 	switch mt {
 	case MessageTypeBegin:
+		if prefix.Otid == nil {
+			return false
+		}
 		required = []int{8}
 	case MessageTypeContinue:
+		if prefix.Otid == nil || prefix.Dtid == nil {
+			return false
+		}
 		required = []int{8, 9}
 	case MessageTypeEnd, MessageTypeAbort:
+		if prefix.Dtid == nil {
+			return false
+		}
 		required = []int{9}
 	}
 	pos := 0
@@ -404,10 +406,6 @@ func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOpt
 		if err != nil || t.Class != tag.ClassApplication || t.Number != number {
 			return false
 		}
-		id, ok := transactionIDValue(children[pos], opts)
-		if !ok || len(id) < 1 && !ber.ToleranceEnabled(opts) {
-			return false
-		}
 		pos++
 	}
 	if mt == MessageTypeAbort {
@@ -417,16 +415,16 @@ func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOpt
 		if pos+1 != len(children) {
 			return false
 		}
-		if applicationChild(children[pos], 11, opts) {
+		if applicationChild(children[pos], 11) {
 			return true
 		}
 		var reason wire.AbortReason
 		return reason.UnmarshalBER(children[pos], opts...) == nil
 	}
-	if pos < len(children) && applicationChild(children[pos], 11, opts) {
+	if pos < len(children) && applicationChild(children[pos], 11) {
 		pos++
 	}
-	if pos < len(children) && applicationChild(children[pos], 12, opts) {
+	if pos < len(children) && applicationChild(children[pos], 12) {
 		pos++
 	} else if mt == MessageTypeUnidirectional {
 		return false
@@ -434,43 +432,9 @@ func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOpt
 	return pos == len(children)
 }
 
-func applicationChild(data []byte, number int, opts []ber.DecodeOption) bool {
+func applicationChild(data []byte, number int) bool {
 	t, err := ber.PeekTag(data)
 	return err == nil && t.Class == tag.ClassApplication && t.Constructed && t.Number == number
-}
-
-// tidPosition returns the position that Q.773 clause 3.1 gives the OTID
-// (i is 0) or the DTID (i is 1) among the elements of a message of type mt,
-// or -1.
-func tidPosition(mt MessageType, i int) int {
-	switch {
-	case i == 0 && (mt == MessageTypeBegin || mt == MessageTypeContinue):
-		return 0
-	case i == 1 && mt == MessageTypeContinue:
-		return 1
-	case i == 1 && (mt == MessageTypeEnd || mt == MessageTypeAbort):
-		return 0
-	}
-	return -1
-}
-
-// transactionIDValue decodes the BER string forms in ITU-T X.690
-// (02/2021) clause 8.7 with the caller's options. Q.773 clause 3.1 limits
-// the resulting transaction ID to 1..4 octets unless violations are tolerated.
-func transactionIDValue(element []byte, opts []ber.DecodeOption) ([]byte, bool) {
-	opts = ber.TrackTCAPForm(opts)
-	if !ber.ToleranceEnabled(opts) && ber.ValidateBERElement(element, opts...) != nil {
-		return nil, false
-	}
-	t, n, value, err := ber.DecodeTLV(element, opts...)
-	if err != nil || n != len(element) || t.Class != tag.ClassApplication || t.Number != 8 && t.Number != 9 {
-		return nil, false
-	}
-	id, err := ber.DecodeImplicitOctetStringValue(t.Constructed, value, opts...)
-	if err != nil || !ber.ToleranceEnabled(opts) && (len(id) < 1 || len(id) > 4) {
-		return nil, false
-	}
-	return id, true
 }
 
 // firstLimit returns the first of errs that is a decode limit, or nil.

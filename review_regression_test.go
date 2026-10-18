@@ -81,14 +81,14 @@ func TestReviewF1TransactionBeforePortions(t *testing.T) {
 func TestReviewF2DerivableTransactionIDs(t *testing.T) {
 	bad := tlv("6c", "a103020105")
 	cases := []struct{ name, input, otid, dtid string }{
-		{"duplicate DTID", "6509480101490102490103", "01", ""},
-		{"duplicate OTID", tlv("62", "480101", "480102", bad), "", ""},
+		{"duplicate DTID", "6509480101490102490103", "01", "02"},
+		{"duplicate OTID", tlv("62", "480101", "480102", bad), "01", ""},
 		{"unexpected End OTID", tlv("64", "490102", "480101", bad), "", "02"},
 		{"unexpected Begin DTID", tlv("62", "480101", "490102", bad), "01", ""},
 		{"misplaced Continue IDs", tlv("65", "490102", "480101", bad), "", ""},
 		{"Unidirectional IDs", tlv("61", "480101", "490102", bad), "", ""},
-		{"UNKNOWN unique IDs", tlv("63", "4f00", "480101", "490102", bad), "01", "02"},
-		{"UNKNOWN duplicate IDs", tlv("63", "480101", "480102", "490103", "490104"), "", ""},
+		{"UNKNOWN IDs after another child", tlv("63", "4f00", "480101", "490102", bad), "", ""},
+		{"UNKNOWN duplicate IDs", tlv("63", "480101", "480102", "490103", "490104"), "01", ""},
 		{"constructed OTID", tlv("62", "680704020102040103", bad), "", ""},
 		{"indefinite OTID", tlv("62", "6880040201020401030000", bad), "", ""},
 		{"constructed DTID", tlv("64", "6903040102", bad), "", ""},
@@ -182,7 +182,7 @@ func TestReviewF4OpaqueKnownAbstractSyntax(t *testing.T) {
 			})
 		}
 	}
-	m := &tcap.Begin{OTID: tcap.TransactionID{1}, Dialogue: &tcap.Dialogue{Opaque: &tcap.External{DirectReference: "1.2", Encoding: runtime.ExternalOctetAligned, OctetAligned: []byte{0x21, 0}}}}
+	m := &tcap.End{DTID: tcap.TransactionID{1}, Dialogue: &tcap.Dialogue{Opaque: &tcap.External{DirectReference: "1.2", Encoding: runtime.ExternalOctetAligned, OctetAligned: []byte{0x21, 0}}}}
 	data, err := m.Marshal()
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ func TestReviewF5BitStringBoundaries(t *testing.T) {
 				if kind == "protocol-version" {
 					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ProtocolVersion: &bits, ApplicationContextName: "1.2"}}
 				} else {
-					m.Dialogue = &tcap.Dialogue{Opaque: &tcap.External{DirectReference: "1.2", Encoding: runtime.ExternalArbitrary, Arbitrary: bits}}
+					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalArbitrary, Arbitrary: bits}}}}
 				}
 				defer func() {
 					if p := recover(); p != nil {
@@ -245,7 +245,7 @@ func TestReviewF5BitStringBoundaries(t *testing.T) {
 						got = *tcap.ProtocolVersion1()
 					}
 				} else {
-					got = back.(*tcap.Begin).Dialogue.Opaque.Arbitrary
+					got = back.(*tcap.Begin).Dialogue.Request.UserInformation[0].Arbitrary
 				}
 				if got.BitLength != tc.want.BitLength || !bytes.Equal(got.Bytes, tc.want.Bytes) {
 					t.Fatalf("parsed bits = %+v; want %+v", got, tc.want)
@@ -293,9 +293,9 @@ func TestReviewF6ParameterBERStructure(t *testing.T) {
 				case "ResultNotLast":
 					m.Components = []tcap.Component{{ReturnResultNotLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(1), Parameter: data}}}}
 				case "SingleASN1Type":
-					m.Dialogue = &tcap.Dialogue{Opaque: &tcap.External{DirectReference: "1.2", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: data}}
+					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: data}}}}
 				case "OctetAligned":
-					m.Dialogue = &tcap.Dialogue{Opaque: &tcap.External{DirectReference: "1.2", Encoding: runtime.ExternalOctetAligned, OctetAligned: data}}
+					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalOctetAligned, OctetAligned: data}}}}
 				case "UserInformation":
 					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: data}}}}
 				}

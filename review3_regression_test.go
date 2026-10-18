@@ -138,30 +138,29 @@ func TestReview3InspectionWithinWorkLimit(t *testing.T) {
 	}
 }
 
-// MaxElements counts every element that inspection reads in a message, as
-// it counts every element the codec reads: an ID after the limit is not
-// examined.
+// MaxElements bounds decoding and inspection. The codec does not accept IDs
+// after a non-ID child, even when the limits permit reading that child.
 func TestReview3InspectionCountsAllElements(t *testing.T) {
 	child := "3080" + "0500" + "0500" + "0500" + "0000"
 	pe := reviewFailure(t, "6380"+child+child+hexDTID+"0000", tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 4}))
 	if pe.DTID != nil || !errors.Is(pe, ber.ErrResourceLimit) {
 		t.Fatalf("DTID %s after the element limit, %v", pe.DTID, pe.Err)
 	}
-	if pe := reviewFailure(t, "6380"+child+child+hexDTID+"0000"+"00"); pe.DTID.String() != "05060708" {
-		t.Fatalf("within the default limits: DTID %s", pe.DTID)
+	if pe := reviewFailure(t, "6380"+child+child+hexDTID+"0000"+"00"); pe.DTID != nil {
+		t.Fatalf("nonleading DTID in codec Prefix: %s", pe.DTID)
 	}
 }
 
-// The caller's MaxDepth bounds inspection as it bounds the codec: an element
-// after a child nested deeper than the limit is not examined.
+// The caller's MaxDepth bounds inspection as it bounds the codec. IDs after
+// a non-ID child remain absent from Prefix with or without a depth failure.
 func TestReview3InspectionWithinDepthLimit(t *testing.T) {
 	deep := "3080" + "3080" + "3080" + "0000" + "0000" + "0000"
 	pe := reviewFailure(t, "6380"+deep+"480101"+"0000", tcap.WithDecodeLimits(ber.DecodeLimits{MaxDepth: 2}))
 	if pe.OTID != nil || !errors.Is(pe, ber.ErrResourceLimit) {
 		t.Fatalf("OTID %s after a child deeper than MaxDepth, %v", pe.OTID, pe.Err)
 	}
-	if pe := reviewFailure(t, "6380"+deep+"480101"+"0000"+"00"); pe.OTID.String() != "01" {
-		t.Fatalf("within the default limits: OTID %s", pe.OTID)
+	if pe := reviewFailure(t, "6380"+deep+"480101"+"0000"+"00"); pe.OTID != nil {
+		t.Fatalf("nonleading OTID in codec Prefix: %s", pe.OTID)
 	}
 }
 
@@ -368,16 +367,16 @@ func TestReview3SegmentedIDCost(t *testing.T) {
 	}
 }
 
-// The segments of a transaction ID count against MaxElements as the decoder
-// counts them, also when the decoder stopped before the ID for another
-// reason (here a constructed NULL, X.690 (02/2021) clause 8.8.1).
+// Segments count against MaxElements. An ID after a malformed preceding
+// child is not accepted, even when the element limit would permit it
+// (X.690 (02/2021) clause 8.8.1).
 func TestReview3SegmentsCountAgainstMaxElements(t *testing.T) {
 	otid := tlv("68", strings.Repeat("0400", 19), "040401020304")
 	input := tlv("63", "2500", otid)
 	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 10}), tcap.WithTolerance(&ber.ViolationLog{})); pe.OTID != nil {
 		t.Fatalf("OTID %s from 21 elements under MaxElements 10", pe.OTID)
 	}
-	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 30}), tcap.WithTolerance(&ber.ViolationLog{})); pe.OTID.String() != "01020304" {
-		t.Fatalf("OTID %s under MaxElements 30", pe.OTID)
+	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 30}), tcap.WithTolerance(&ber.ViolationLog{})); pe.OTID != nil {
+		t.Fatalf("nonleading OTID under MaxElements 30: %s", pe.OTID)
 	}
 }

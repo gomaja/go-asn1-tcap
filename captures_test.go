@@ -92,9 +92,6 @@ func TestCaptures(t *testing.T) {
 				return
 			}
 			want := c.Hex
-			if expected, ok := captureMarshalEncodings[c.Name]; ok {
-				want = expected
-			}
 			if hex.EncodeToString(out) != want {
 				t.Errorf("Marshal:\n got %x\nwant %s", out, want)
 			}

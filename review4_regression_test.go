@@ -45,9 +45,16 @@ func TestReview4Table3UnderTolerance(t *testing.T) {
 
 func TestReview4DialogueFailureDiscardsComponents(t *testing.T) {
 	// Q.774 (06/97) clause 3.2.2.1 discards components after an incorrect dialogue.
-	// The codec reports the component first: https://github.com/gomaja/go-asn1/issues/163.
-	// Err describes the dialogue portion alone, without the codec's component failure.
+	// Strict decoding reports the dialogue violation before the component error.
+	// Err describes that dialogue portion alone.
 	input := hx("62204801016b142812060700118605010201a0076005a10306012a6c05a103020105")
+	var w wire.TCMessage
+	var codecFailure *wire.DecodeError
+	var violation *ber.ValidationError
+	codecErr := w.UnmarshalBER(input)
+	if !errors.As(codecErr, &codecFailure) || !errors.As(codecErr, &violation) || codecFailure.Path != "begin.dialoguePortion" {
+		t.Fatalf("codec dialogue precedence: %v", codecErr)
+	}
 	m, err := tcap.Parse(input)
 	var pe *tcap.ParseError
 	var decoded *wire.DecodeError
@@ -62,7 +69,7 @@ func TestReview4TransactionIDTags(t *testing.T) {
 		{"End OTID at DTID position", "64054801026c00", "", ""},
 		{"Abort OTID at DTID position", "67054801024a00", "", ""},
 		{"Continue swapped IDs", "65084901024801016c00", "", ""},
-		{"Continue repeated OTID at DTID position", "65084801014801026c00", "", ""},
+		{"Continue repeated OTID at DTID position", "65084801014801026c00", "01", ""},
 	} {
 		for _, tolerant := range []bool{false, true} {
 			for _, maxElements := range []int{0, 2, 3} {
@@ -71,9 +78,6 @@ func TestReview4TransactionIDTags(t *testing.T) {
 					opts = append(opts, tcap.WithTolerance(&ber.ViolationLog{}))
 				}
 				wantOTID := tc.otid
-				if maxElements != 0 && tc.name == "Continue repeated OTID at DTID position" {
-					wantOTID = "01"
-				}
 				_, err := tcap.Parse(hx(tc.input), opts...)
 				var pe *tcap.ParseError
 				if !errors.As(err, &pe) {
@@ -87,9 +91,9 @@ func TestReview4TransactionIDTags(t *testing.T) {
 	}
 }
 
-// A decode limit met while inspecting a failed message leaves the transaction
-// IDs read before it (ITU-T Q.774 (06/97) clause 3.3.4 and Table 7).
-func TestReview4LimitDuringInspectionKeepsIDs(t *testing.T) {
+// A truncated message keeps the IDs accepted by the codec (ITU-T Q.774
+// (06/97) clause 3.3.4 and Table 7), without another scan for IDs.
+func TestReview4TruncatedMessageKeepsPrefixIDs(t *testing.T) {
 	for _, tc := range []struct{ name, input, otid, dtid string }{
 		{"Begin cut after its OTID", "62064801016c", "01", ""},
 		{"End cut after its DTID", "64064901026c", "", "02"},
@@ -101,7 +105,7 @@ func TestReview4LimitDuringInspectionKeepsIDs(t *testing.T) {
 			}
 			_, err := tcap.Parse(hx(tc.input), opts...)
 			var pe *tcap.ParseError
-			if !errors.As(err, &pe) || pe.Portion != tcap.PortionTransaction || pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid || !errors.Is(err, ber.ErrResourceLimit) || !errors.Is(err, ber.ErrTruncated) {
+			if !errors.As(err, &pe) || pe.Portion != tcap.PortionTransaction || pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid || errors.Is(err, ber.ErrResourceLimit) || !errors.Is(err, ber.ErrTruncated) {
 				t.Fatalf("%s, tolerant %t: %v", tc.name, tolerant, err)
 			}
 		}
@@ -147,13 +151,19 @@ func TestReview4MalformedTransactionTail(t *testing.T) {
 }
 
 // A dialogue portion that the codec refuses keeps the OTID before it, which
-// the ABRT of Q.774 (06/97) clause 3.2.2.1 is sent to, although the codec
-// locates the refusal at the message: https://github.com/gomaja/go-asn1/issues/166.
+// the ABRT of Q.774 (06/97) clause 3.2.2.1 is sent to.
 func TestReview4DialogueFailureKeepsOTID(t *testing.T) {
 	for _, input := range []string{
 		"620c4801016b0728050201008100", // EXTERNAL identified by indirect-reference only
 		"62094801016b0428028100",       // EXTERNAL without a reference
 	} {
+		var w wire.TCMessage
+		codecErr := w.UnmarshalBER(hx(input))
+		var failure *wire.DecodeError
+		var location *ber.ElementError
+		if !errors.As(codecErr, &failure) || !errors.As(codecErr, &location) || location.Offset() != 5 || len(location.ChildIndexes()) != 1 || location.ChildIndexes()[0] != 1 || failure.Prefix.Otid == nil || tcap.TransactionID(*failure.Prefix.Otid).String() != "01" {
+			t.Fatalf("codec dialogue location and prefix: %v", codecErr)
+		}
 		_, err := tcap.Parse(hx(input))
 		var pe *tcap.ParseError
 		if !errors.As(err, &pe) || pe.Portion != tcap.PortionDialogue || pe.OTID.String() != "01" {

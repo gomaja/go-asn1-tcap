@@ -134,15 +134,13 @@ type ParseError struct {
 	// not recognized or its tag cannot be decoded.
 	MessageType MessageType
 
-	// OTID and DTID are the transaction IDs that could be derived from where
-	// the message type carries them, as the abnormal procedures of Q.774
-	// clauses 3.2.2 and 3.3.4 and Table 7 need them. An ID is derivable when
-	// it and the elements before it are valid. In strict mode, an ID that
-	// breaks Q.773 clause 4.1.1 is not, and neither is any ID of a message
-	// whose own header breaks it. Parse takes the IDs from
-	// wire.DecodeError.Prefix and finds the others itself, within the decode
-	// limits; when a limit stops decoding, only IDs before it are taken. IDs
-	// are nil when not derivable; an empty ID accepted with WithTolerance is
+	// OTID and DTID are the transaction IDs accepted by the codec under the
+	// active options, for the abnormal procedures of ITU-T Q.774 (06/97)
+	// clauses 3.2.2 and 3.3.4 and Table 7. When decoding fails, they are copied
+	// from wire.DecodeError.Prefix. A leading accepted ID remains derivable
+	// when a duplicate follows or the message's header violates Q.773 clause
+	// 4.1.1. Decode limits also govern which IDs the codec accepts. IDs are
+	// nil when not derivable; an empty ID accepted with WithTolerance is
 	// non-nil.
 	OTID TransactionID
 	DTID TransactionID
