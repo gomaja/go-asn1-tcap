@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gomaja/go-asn1/runtime/ber"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 // ParseOption configures Parse.
@@ -19,14 +19,14 @@ type parseConfig struct {
 	limits   *ber.DecodeLimits
 }
 
-// WithConstraintTolerance makes Parse accept values outside their ASN.1
-// constraints, such as a transaction ID longer than 4 octets or an invoke ID
-// outside -128..127, and record each violation in log. The violations are
-// recorded only if Parse succeeds. Encoding errors and the rules for dialogue
-// PDUs still apply, and Marshal stays strict: a message parsed with tolerated
-// violations does not marshal until they are corrected. log must not be nil.
-// If supplied more than once, the last WithConstraintTolerance wins.
-func WithConstraintTolerance(log *ber.ViolationLog) ParseOption {
+// WithTolerance makes Parse accept other valid BER representations and
+// values outside their ASN.1 constraints, recording each violation in log
+// only if Parse succeeds. BER structure errors and the dialogue rules of
+// ITU-T Q.774 (06/97) Table 3 apply in both modes. Marshal stays strict:
+// parameters and EXTERNAL single-ASN1-type contents that violate Q.773 clause
+// 4.1.1 must be corrected before encoding. log must not be nil.
+// If supplied more than once, the last WithTolerance wins.
+func WithTolerance(log *ber.ViolationLog) ParseOption {
 	return toleranceParseOption{log}
 }
 
@@ -52,7 +52,7 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 	}
 	var decodeOpts []ber.DecodeOption
 	if config.tolerant {
-		decodeOpts = append(decodeOpts, ber.WithConstraintTolerance(config.log))
+		decodeOpts = append(decodeOpts, ber.WithTolerance(config.log))
 	}
 	limits := ber.DefaultDecodeLimits()
 	if config.limits != nil {
@@ -81,25 +81,21 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 	if err := w.UnmarshalBER(data, decodeOpts...); err != nil {
 		// Decode limits are operational failures; Q.774 Table 7 context needs
 		// only transaction IDs and must not decode the portions again.
-		pe := inspectFailure(data, decodeOpts, errors.Is(err, ber.ErrResourceLimit), limits)
+		pe := inspectFailure(data, decodeOpts, errors.Is(err, ber.ErrResourceLimit), limits, err)
 		// Err describes the element that Portion and ComponentIndex
 		// designate: a dialogue portion or component that inspection found
 		// failing, whatever the codec met later, or else the message.
 		if pe.Portion == PortionTransaction || pe.Err == nil {
 			pe.Err = joinErrors(pe.Err, err)
 		}
+		var failure *wire.DecodeError
+		if errors.As(err, &failure) {
+			decodeFailureIDs(pe, failure, data, decodeOpts, limits)
+		}
 		return nil, pe
 	}
-	m, pe := decodeMessage(&w, decodeOpts)
+	m, pe := decodeMessage(&w)
 	if pe != nil {
-		if errors.Is(pe.Err, ber.ErrResourceLimit) {
-			// The complete transaction already decoded within the outer
-			// limits; a dialogue PDU inside opaque octets has its own budget.
-			pe.Portion, pe.ComponentIndex = PortionTransaction, -1
-			pe.InvokeID, pe.Dialogue, pe.Components = nil, nil, nil
-			pe.ComponentType = ""
-			return nil, pe
-		}
 		if pe.ComponentIndex >= 0 {
 			pe.InvokeID, pe.ComponentType = inspectComponent(data, pe.ComponentIndex, decodeOpts)
 		}

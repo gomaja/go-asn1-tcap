@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
@@ -30,13 +30,14 @@ func TestReview2ErrMatchesLocation(t *testing.T) {
 		if pe.Portion != tcap.PortionComponent || pe.ComponentIndex != 0 || pe.ComponentType != tcap.ComponentTypeInvoke || pe.InvokeID == nil || *pe.InvokeID != 3 {
 			t.Fatalf("context = %+v", pe)
 		}
-		if !errors.Is(pe, tcap.ErrInvalidLinkedID) {
-			t.Fatalf("Err = %v, want ErrInvalidLinkedID", pe.Err)
+		var validation *ber.ValidationError
+		if !errors.As(pe, &validation) {
+			t.Fatalf("Err = %v, want ValidationError", pe.Err)
 		}
 	})
 	t.Run("constraint before a codec failure", func(t *testing.T) {
 		pe := reviewFailure(t, tlv("62", hexOTID, tlv("6c", hexInvokeID200, hexCodecBadInvoke)))
-		var ce *ber.ConstraintError
+		var ce *ber.ValidationError
 		if pe.ComponentIndex != 0 || !errors.As(pe, &ce) {
 			t.Fatalf("context = %+v, Err = %v", pe, pe.Err)
 		}
@@ -54,15 +55,15 @@ func TestReview2ErrMatchesLocation(t *testing.T) {
 	})
 }
 
-// With WithConstraintTolerance, the transaction IDs that Parse accepts are
+// With WithTolerance, the transaction IDs that Parse accepts are
 // also the ones a failure reports.
 func TestReview2ToleratedIDsDerivable(t *testing.T) {
 	var log ber.ViolationLog
-	pe := reviewFailure(t, tlv("62", hexOTIDFiveOctets, tlv("6c", hexCodecBadInvoke)), tcap.WithConstraintTolerance(&log))
+	pe := reviewFailure(t, tlv("62", hexOTIDFiveOctets, tlv("6c", hexCodecBadInvoke)), tcap.WithTolerance(&log))
 	if pe.Portion != tcap.PortionComponent || pe.OTID.String() != "0102030405" {
 		t.Fatalf("codec path: %+v, OTID %s", pe, pe.OTID)
 	}
-	pe = reviewFailure(t, tlv("65", hexOTID, hexDTIDFiveOctets, tlv("6c", hexLinkedAbsent)), tcap.WithConstraintTolerance(&log))
+	pe = reviewFailure(t, tlv("65", hexOTID, hexDTIDFiveOctets, tlv("6c", hexLinkedAbsent)), tcap.WithTolerance(&log))
 	if pe.Portion != tcap.PortionComponent || pe.DTID.String() != "0102030405" || pe.OTID.String() != "01020304" {
 		t.Fatalf("receiver path: %+v, IDs %s/%s", pe, pe.OTID, pe.DTID)
 	}

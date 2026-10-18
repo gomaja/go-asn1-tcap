@@ -6,8 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime/ber"
-	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
@@ -55,15 +54,15 @@ func TestReview3ErrIsTheLocatedFailure(t *testing.T) {
 	}
 }
 
-// With WithConstraintTolerance, Parse accepts an empty transaction ID, and a
+// With WithTolerance, Parse accepts an empty transaction ID, and a
 // failure derives it as well; without it, an empty ID is not derivable.
 func TestReview3ToleratedEmptyIDs(t *testing.T) {
 	var accepted, log ber.ViolationLog
-	m, err := tcap.Parse(hx(tlv("62", "4800")), tcap.WithConstraintTolerance(&accepted))
+	m, err := tcap.Parse(hx(tlv("62", "4800")), tcap.WithTolerance(&accepted))
 	if begin, ok := m.(*tcap.Begin); err != nil || !ok || begin.OTID == nil || len(accepted.Snapshot()) != 1 {
 		t.Fatalf("Parse = %#v, %v, %d violations", m, err, len(accepted.Snapshot()))
 	}
-	tolerant := tcap.WithConstraintTolerance(&log)
+	tolerant := tcap.WithTolerance(&log)
 	for _, input := range []string{
 		tlv("62", "4800", tlv("6c", hexCodecBadInvoke)),
 		tlv("62", "4800", tlv("6c", hexLinkedAbsent)),
@@ -105,47 +104,35 @@ func TestReview3ScanEndsAtEndOfContents(t *testing.T) {
 }
 
 // Inspection after a failure keeps within the caller's decode limits and
-// costs about what the codec does: it does not decode every child of a large
-// message again.
+// rejects large inputs before allocating replay storage for their contents.
 func TestReview3InspectionWithinWorkLimit(t *testing.T) {
 	for _, tc := range []struct {
 		name, input string
 		limits      *ber.DecodeLimits
 		otid        string
 	}{
-		// go-asn1 locates a MaxWork failure at the root: https://github.com/gomaja/go-asn1/issues/155.
-		{"MaxWork 8", "6280" + "480101" + strings.Repeat("30020500", 100000) + "0000", &ber.DecodeLimits{MaxWork: 8}, ""},
+		{"MaxWork 8", "6280" + "480101" + strings.Repeat("30020500", 100000) + "0000", &ber.DecodeLimits{MaxWork: 8}, "01"},
 		{"default limits", "6280" + hexOTID + strings.Repeat("0500", 800000) + "0000", nil, "01020304"},
 		{"indefinite children", "6280" + hexOTID + strings.Repeat("30800000", 100000) + "0000", nil, "01020304"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			input := hx(tc.input)
 			var opts []tcap.ParseOption
-			var decodeOpts []ber.DecodeOption
 			if tc.limits != nil {
 				opts = append(opts, tcap.WithDecodeLimits(*tc.limits))
-				decodeOpts = append(decodeOpts, ber.WithDecodeLimits(*tc.limits))
 			}
-			// Exclude the codec's own allocation cost, tracked in
-			// https://github.com/gomaja/go-asn1/issues/150.
-			var before, decoded, after runtime.MemStats
-			var w wire.TCMessage
+			var before, after runtime.MemStats
 			runtime.ReadMemStats(&before)
-			codecErr := w.UnmarshalBER(input, decodeOpts...)
-			runtime.ReadMemStats(&decoded)
 			_, err := tcap.Parse(input, opts...)
 			runtime.ReadMemStats(&after)
-			if !errors.Is(codecErr, ber.ErrResourceLimit) {
-				t.Fatalf("bare codec = %v", codecErr)
-			}
 			var pe *tcap.ParseError
 			if !errors.As(err, &pe) || !errors.Is(err, ber.ErrResourceLimit) || pe.OTID.String() != tc.otid {
 				t.Fatalf("Parse = %v", err)
 			}
-			allocated := int64(after.TotalAlloc-decoded.TotalAlloc) - int64(decoded.TotalAlloc-before.TotalAlloc)
-			t.Logf("codec allocated %d, Parse allocated %d, inspection difference %d octets", decoded.TotalAlloc-before.TotalAlloc, after.TotalAlloc-decoded.TotalAlloc, allocated)
+			allocated := after.TotalAlloc - before.TotalAlloc
+			t.Logf("Parse allocated %d octets", allocated)
 			if allocated > 1<<20 {
-				t.Fatalf("inspection allocated %d octets beyond the codec", allocated)
+				t.Fatalf("Parse allocated %d octets for rejected input", allocated)
 			}
 		})
 	}
@@ -178,28 +165,28 @@ func TestReview3InspectionWithinDepthLimit(t *testing.T) {
 	}
 }
 
-// A decode limit that inspection meets in a portion the codec decoded as an
-// open type is the cause, as when the codec meets it (Portion transaction).
+// A decode limit inside the typed dialogue is a transaction portion failure,
+// with the leading transaction ID preserved (Q.774 (06/97) Table 7).
 func TestReview3ResourceLimitInPortion(t *testing.T) {
-	// protocol-version as a BIT STRING constructed 20 levels deep (X.690
-	// (02/2021) clause 8.6.4), which the codec carries inside the EXTERNAL.
+	// Tolerance permits the constructed BIT STRING so the work limit can be exercised
+	// inside the typed dialogue (X.690 (02/2021) clause 8.6.4).
 	pv := "03020780"
 	for range 20 {
 		pv = tlv("23", pv)
 	}
 	aarq := tlv("60", tlv("a0", pv), hexACN3)
-	pe := reviewFailure(t, tlv("62", hexOTID, dialoguePortion(hexDialogueAS, aarq), tlv("6c", hexCodecBadInvoke)), tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: 200}))
+	pe := reviewFailure(t, tlv("62", hexOTID, dialoguePortion(hexDialogueAS, aarq), tlv("6c", hexCodecBadInvoke)), tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: 64}), tcap.WithTolerance(&ber.ViolationLog{}))
 	if pe.Portion != tcap.PortionTransaction || !errors.Is(pe, ber.ErrResourceLimit) || pe.OTID.String() != "01020304" {
 		t.Fatalf("%+v: %v", pe, pe.Err)
 	}
 }
 
-// With WithConstraintTolerance, an invoke ID that Parse accepts outside
+// With WithTolerance, an invoke ID that Parse accepts outside
 // -128..127 is also reported after a failure (Q.774 (06/97) Table 5).
 func TestReview3ToleratedInvokeID(t *testing.T) {
 	var log ber.ViolationLog
 	input := tlv("62", hexOTID, tlv("6c", tlv("a1", "020200c8", "8100", "02012d")))
-	if pe := reviewFailure(t, input, tcap.WithConstraintTolerance(&log)); pe.InvokeID == nil || *pe.InvokeID != 200 || !errors.Is(pe, tcap.ErrInvalidLinkedID) {
+	if pe := reviewFailure(t, input, tcap.WithTolerance(&log)); pe.InvokeID == nil || *pe.InvokeID != 200 || !errors.Is(pe, tcap.ErrInvalidLinkedID) {
 		t.Fatalf("tolerant: %+v", pe)
 	}
 	if pe := reviewFailure(t, input); pe.InvokeID != nil {
@@ -244,7 +231,6 @@ func TestReview3IDsAtTheirPositionsBeyondLimits(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(tc.limits))
-			// go-asn1 locates a MaxWork failure at the root: https://github.com/gomaja/go-asn1/issues/155.
 			wantID := "01"
 			if tc.limits.MaxWork != 0 {
 				wantID = ""
@@ -256,10 +242,9 @@ func TestReview3IDsAtTheirPositionsBeyondLimits(t *testing.T) {
 	}
 }
 
-// A decode limit that only inspection meets, after the decoder stopped at an
-// earlier malformed element, is reported with the decoder's failure, so that
-// Err tells that the transaction IDs come from their positions.
-func TestReview3InspectionLimitIsReported(t *testing.T) {
+// Inspection stops at the first failing component; it does not scan the
+// later components deeply enough to exhaust the decode limits.
+func TestReview3InspectionStopsAtFirstFailure(t *testing.T) {
 	constructedNull := tlv("a1", "020101", "02012d", "2500")
 	components := "6c80" + constructedNull + "a180" + strings.Repeat("0500", 20) + "0000" + "0000"
 	for _, input := range []string{
@@ -267,7 +252,7 @@ func TestReview3InspectionLimitIsReported(t *testing.T) {
 		"6280" + hexOTID + components + "0000",
 	} {
 		pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 10}))
-		if pe.Portion != tcap.PortionTransaction || !errors.Is(pe, ber.ErrResourceLimit) || !errors.Is(pe, ber.ErrInvalidTag) || pe.OTID.String() != "01020304" {
+		if pe.Portion != tcap.PortionComponent || pe.ComponentIndex != 0 || errors.Is(pe, ber.ErrResourceLimit) || !errors.Is(pe, ber.ErrInvalidTag) || pe.OTID.String() != "01020304" {
 			t.Fatalf("%s: %+v: %v", input[:4], pe, pe.Err)
 		}
 	}
@@ -297,12 +282,11 @@ func TestReview3SegmentedIDsWithinLimits(t *testing.T) {
 		{"elements after two segments", "6517680804020102040203044904050607086c05a103020105", "01020304", "", ber.DecodeLimits{MaxElements: 4}},
 		{"nested segments", "6519680a240824060404010203044904050607086c05a103020105", "", "", ber.DecodeLimits{MaxDepth: 3}},
 		{"within the limits", "6519680a240824060404010203044904050607086c05a103020105", "01020304", "05060708", ber.DecodeLimits{MaxDepth: 4, MaxElements: 7}},
-		// go-asn1 locates a MaxWork failure at the root: https://github.com/gomaja/go-asn1/issues/155.
 		{"work of the segments", "620768030401010500", "", "", ber.DecodeLimits{MaxWork: 5}},
 		{"work of indefinite segments", "6209688004010100000500", "", "", ber.DecodeLimits{MaxWork: 7}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(tc.limits))
+			pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(tc.limits), tcap.WithTolerance(&ber.ViolationLog{}))
 			if pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid || (pe.OTID == nil) != (tc.otid == "") || (pe.DTID == nil) != (tc.dtid == "") {
 				t.Fatalf("IDs %s/%s, want %s/%s: %v", pe.OTID, pe.DTID, tc.otid, tc.dtid, pe.Err)
 			}
@@ -335,8 +319,8 @@ func TestReview3NoInvokeIDOfPrimitiveElement(t *testing.T) {
 	}
 }
 
-// Inspection of deeply segmented IDs stays within its allocation budget beyond
-// the codec (ITU-T X.690 (02/2021) clause 8.7.3).
+// Parsing deeply segmented IDs has an absolute allocation bound
+// (ITU-T X.690 (02/2021) clause 8.7.3).
 func TestReview3SegmentedIDCost(t *testing.T) {
 	id := tlv("04", strings.Repeat("aa", 1<<20))
 	for range 120 {
@@ -349,47 +333,36 @@ func TestReview3SegmentedIDCost(t *testing.T) {
 		budget   int64
 	}{
 		{"strict", false, 4 << 20},
-		{"tolerant", true, 16 << 20},
+		{"tolerant", true, 48 << 20},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var opts []tcap.ParseOption
-			var decodeOpts []ber.DecodeOption
 			var log ber.ViolationLog
 			if tc.tolerant {
-				opts = append(opts, tcap.WithConstraintTolerance(&log))
-				decodeOpts = append(decodeOpts, ber.WithConstraintTolerance(&log))
+				opts = append(opts, tcap.WithTolerance(&log))
 			}
-			// Measure only this package's cost; the codec's allocation growth
-			// is https://github.com/gomaja/go-asn1/issues/150.
-			var before, decoded, after runtime.MemStats
-			var w wire.TCMessage
+			var before, after runtime.MemStats
 			runtime.ReadMemStats(&before)
-			codecErr := w.UnmarshalBER(input, decodeOpts...)
-			runtime.ReadMemStats(&decoded)
 			_, err := tcap.Parse(input, opts...)
 			runtime.ReadMemStats(&after)
-			if codecErr == nil {
-				t.Fatal("bare codec unexpectedly accepted malformed component")
-			}
 			var pe *tcap.ParseError
 			if !errors.As(err, &pe) {
 				t.Fatalf("Parse = %v", err)
 			}
-			if pe.OTID != nil {
-				t.Fatalf("Parse = %v, OTID of %d octets", err, len(pe.OTID))
-			}
+			wantLength := 0
 			if tc.tolerant {
-				// Per-level charging causes a typed-only limit without a
-				// location: https://github.com/gomaja/go-asn1/issues/151.
-				var location *ber.ElementError
-				if !errors.Is(err, ber.ErrResourceLimit) || !errors.Is(codecErr, ber.ErrResourceLimit) || errors.As(codecErr, &location) {
-					t.Fatalf("tolerant limit: Parse %v, codec %v", err, codecErr)
-				}
+				wantLength = 1 << 20
 			}
-			allocated := int64(after.TotalAlloc-decoded.TotalAlloc) - int64(decoded.TotalAlloc-before.TotalAlloc)
-			t.Logf("codec allocated %d, Parse allocated %d, inspection difference %d octets", decoded.TotalAlloc-before.TotalAlloc, after.TotalAlloc-decoded.TotalAlloc, allocated)
-			if allocated > tc.budget {
-				t.Fatalf("inspection allocated %d octets beyond the codec", allocated)
+			if len(pe.OTID) != wantLength {
+				t.Fatalf("OTID has %d octets, want %d: %v", len(pe.OTID), wantLength, err)
+			}
+			if tc.tolerant && errors.Is(err, ber.ErrResourceLimit) {
+				t.Fatalf("segmented bytes charged more than once: %v", err)
+			}
+			allocated := after.TotalAlloc - before.TotalAlloc
+			t.Logf("Parse allocated %d octets", allocated)
+			if allocated > uint64(tc.budget) {
+				t.Fatalf("Parse allocated %d octets", allocated)
 			}
 		})
 	}
@@ -401,10 +374,10 @@ func TestReview3SegmentedIDCost(t *testing.T) {
 func TestReview3SegmentsCountAgainstMaxElements(t *testing.T) {
 	otid := tlv("68", strings.Repeat("0400", 19), "040401020304")
 	input := tlv("63", "2500", otid)
-	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 10})); pe.OTID != nil {
+	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 10}), tcap.WithTolerance(&ber.ViolationLog{})); pe.OTID != nil {
 		t.Fatalf("OTID %s from 21 elements under MaxElements 10", pe.OTID)
 	}
-	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 30})); pe.OTID.String() != "01020304" {
+	if pe := reviewFailure(t, input, tcap.WithDecodeLimits(ber.DecodeLimits{MaxElements: 30}), tcap.WithTolerance(&ber.ViolationLog{})); pe.OTID.String() != "01020304" {
 		t.Fatalf("OTID %s under MaxElements 30", pe.OTID)
 	}
 }

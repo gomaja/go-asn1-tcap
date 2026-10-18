@@ -11,7 +11,7 @@ import (
 
 // A Begin with an AARQ for application context 0.4.0.0.1.0.20.3 and one
 // Invoke (invoke ID 1, operation code 45).
-const exampleBegin = "62374804010203046b1e281c060700118605010101a011600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203"
+const exampleBegin = "62334804010203046b1a2818060700118605010101a00d600ba1090607040000010014036c0fa10d02010102012d30050403010203"
 
 // Parse a message and act on its type.
 func ExampleParse() {
@@ -65,8 +65,10 @@ func ExampleBegin_Marshal() {
 		return
 	}
 	fmt.Printf("%x\n", data)
+	// Marshal omits DEFAULT protocol-version: https://github.com/gomaja/go-asn1/issues/164.
+
 	// Output:
-	// 62374804010203046b1e281c060700118605010101a011600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203
+	// 62334804010203046b1a2818060700118605010101a00d600ba1090607040000010014036c0fa10d02010102012d30050403010203
 }
 
 // Answer a Begin with a Continue that accepts the proposed application
@@ -97,8 +99,10 @@ func ExampleNewAcceptDialogue() {
 		return
 	}
 	fmt.Printf("%x\n", out)
+	// Marshal omits DEFAULT protocol-version: https://github.com/gomaja/go-asn1/issues/164.
+
 	// Output:
-	// 654a4804050607084904010203046b2a2828060700118605010101a01d611b80020780a109060704000001001403a203020100a305a1030201006c10a20e020101300902012d30040402aabb
+	// 65464804050607084904010203046b262824060700118605010101a0196117a109060704000001001403a203020100a305a1030201006c10a20e020101300902012d30040402aabb
 }
 
 // Refuse a dialogue whose application context is not supported, offering
@@ -116,14 +120,16 @@ func ExampleNewRejectDialogue() {
 		return
 	}
 	fmt.Printf("%x\n", out)
+	// Marshal omits DEFAULT protocol-version: https://github.com/gomaja/go-asn1/issues/164.
+
 	// Output:
-	// 67324904010203046b2a2828060700118605010101a01d611b80020780a109060704000001001402a203020101a305a103020102
+	// 672e4904010203046b262824060700118605010101a0196117a109060704000001001402a203020101a305a103020102
 }
 
 // Abort a transaction from the transaction sub-layer with a P-Abort cause
 // (ITU-T Q.773 (06/97) Table 12).
 func ExampleAbort_Marshal() {
-	cause := wire.PAbortCauseUnrecognizedTransactionID
+	cause := wire.PAbortCauseUnrecognizedTransactionIDValue()
 	abort := &tcap.Abort{DTID: tcap.TransactionID{0x01, 0x02, 0x03, 0x04}, PAbortCause: &cause}
 	out, err := abort.Marshal()
 	if err != nil {

@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
-	"github.com/gomaja/go-asn1/runtime/ber"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func TestParseDerivableIDsMatchCodecLimitLocations(t *testing.T) {
@@ -31,7 +31,8 @@ func TestParseDerivableIDsMatchCodecLimitLocations(t *testing.T) {
 						case "work":
 							limits.MaxWork = n
 						}
-						opts := []ber.DecodeOption{ber.WithDecodeLimits(limits)}
+						var reports ber.ViolationLog
+						opts := []ber.DecodeOption{ber.WithDecodeLimits(limits), ber.WithTolerance(&reports)}
 						validation := ber.ValidateBERElement(data, opts...)
 						var w wire.TCMessage
 						decoded := w.UnmarshalBER(data, opts...)
@@ -45,7 +46,7 @@ func TestParseDerivableIDsMatchCodecLimitLocations(t *testing.T) {
 						if !errors.Is(decoded, ber.ErrResourceLimit) || !errors.As(validation, &vloc) || !errors.As(decoded, &dloc) || vloc.Offset() != dloc.Offset() || !reflect.DeepEqual(vloc.ChildIndexes(), dloc.ChildIndexes()) {
 							t.Fatalf("preflight %v / typed %v", validation, decoded)
 						}
-						_, err := tcap.Parse(data, tcap.WithDecodeLimits(limits))
+						_, err := tcap.Parse(data, tcap.WithDecodeLimits(limits), tcap.WithTolerance(&ber.ViolationLog{}))
 						var pe *tcap.ParseError
 						if !errors.As(err, &pe) || !errors.Is(err, ber.ErrResourceLimit) {
 							t.Fatalf("Parse: %v", err)

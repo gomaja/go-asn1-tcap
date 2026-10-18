@@ -6,8 +6,8 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/gomaja/go-asn1/runtime"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 )
 
 var bigOne = big.NewInt(1)
@@ -73,13 +73,16 @@ func marshalMessage(m Message) ([]byte, error) {
 	// including present-empty and mandatory component portions.
 	switch mt {
 	case MessageTypeBegin:
-		msg = wire.NewTCMessageBegin(wire.TCMessageBeginBound{Otid: slices.Clone(otid), DialoguePortion: d, Components: componentsForBegin(c)})
+		msg = wire.NewTCMessageBegin(wire.Begin{Otid: wire.OrigTransactionID(slices.Clone(otid)), DialoguePortion: d, Components: c})
 	case MessageTypeContinue:
-		msg = wire.NewTCMessageContinue(wire.TCMessageContinueBound{Otid: slices.Clone(otid), Dtid: slices.Clone(dtid), DialoguePortion: d, Components: componentsForContinue(c)})
+		msg = wire.NewTCMessageContinue(wire.Continue{Otid: wire.OrigTransactionID(slices.Clone(otid)), Dtid: wire.DestTransactionID(slices.Clone(dtid)), DialoguePortion: d, Components: c})
 	case MessageTypeEnd:
-		msg = wire.NewTCMessageEnd(wire.TCMessageEndBound{Dtid: slices.Clone(dtid), DialoguePortion: d, Components: componentsForEnd(c)})
+		msg = wire.NewTCMessageEnd(wire.End{Dtid: wire.DestTransactionID(slices.Clone(dtid)), DialoguePortion: d, Components: c})
 	case MessageTypeUnidirectional:
-		msg = wire.NewTCMessageUnidirectional(wire.TCMessageUnidirectionalBound{DialoguePortion: d, Components: componentsForUnidirectional(c)})
+		if c == nil {
+			c = &wire.ComponentPortion{}
+		}
+		msg = wire.NewTCMessageUnidirectional(wire.Unidirectional{DialoguePortion: d, Components: *c})
 	case MessageTypeAbort:
 		var reason *wire.AbortReason
 		if cause != nil {
@@ -90,7 +93,7 @@ func marshalMessage(m Message) ([]byte, error) {
 			r := wire.NewAbortReasonUAbortCause(*d)
 			reason = &r
 		}
-		msg = wire.NewTCMessageAbort(wire.Abort{Dtid: slices.Clone(dtid), Reason: reason})
+		msg = wire.NewTCMessageAbort(wire.Abort{Dtid: wire.DestTransactionID(slices.Clone(dtid)), Reason: reason})
 	}
 	out, err := msg.MarshalBER()
 	if err != nil {
@@ -104,25 +107,22 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 	if cs == nil {
 		return nil, nil
 	}
-	out := &wire.ComponentPortion{Values: make([]wire.ComponentPortionElemBound, len(cs))}
+	out := &wire.ComponentPortion{Values: make([]wire.Component, len(cs))}
 	for i, c := range cs {
 		path := fmt.Sprintf("Components[%d]", i)
 		count := set(c.Invoke != nil) + set(c.ReturnResultLast != nil) + set(c.ReturnResultNotLast != nil) + set(c.ReturnError != nil) + set(c.Reject != nil)
 		if err := alternative(count, ErrComponentNoAlternative, ErrComponentMultipleAlternatives); err != nil {
 			return nil, fieldError(path, err)
 		}
-		var ros wire.ComponentPortionElemBasicROSBound
+		var ros wire.ROS
 		switch {
 		case c.Invoke != nil:
 			v := c.Invoke
 			p := path + ".Invoke"
-			w := wire.ComponentPortionElemBasicROSInvokeBound{InvokeId: wire.NewTCInvokeIdSetPresent(v.InvokeID)}
+			w := wire.Invoke{InvokeId: wire.NewTCInvokeIdSetPresentInt64(v.InvokeID)}
 			if v.LinkedID != nil {
-				if err := checkEncodeComponentID(*v.LinkedID, p+".LinkedID"); err != nil {
-					return nil, err
-				}
 				// Q.773 Table 20: [0] IMPLICIT INTEGER, not an explicit wrapper.
-				l := wire.NewComponentPortionElemBasicROSInvokeBoundLinkedIdPresent(big.NewInt(*v.LinkedID))
+				l := wire.NewInvokeLinkedIdPresentInt64(*v.LinkedID)
 				w.LinkedId = &l
 			}
 			code, err := encodeCode(v.OpCode, p+".OpCode")
@@ -133,7 +133,7 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 			if v.Parameter != nil {
 				w.Argument = &runtime.RawValue{Bytes: slices.Clone(v.Parameter)}
 			}
-			ros = wire.NewComponentPortionElemBasicROSBoundInvoke(w)
+			ros = wire.NewROSInvoke(w)
 		case c.ReturnResultLast != nil || c.ReturnResultNotLast != nil:
 			v, name := c.ReturnResultLast, ".ReturnResultLast"
 			if v == nil {
@@ -144,50 +144,41 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 				return nil, err
 			}
 			if c.ReturnResultNotLast != nil {
-				out.Values[i] = wire.NewComponentPortionElemBoundReturnResultNotLast(w)
+				out.Values[i] = wire.NewComponentReturnResultNotLast(w)
 				continue
 			}
-			ros = wire.NewComponentPortionElemBasicROSBoundReturnResult(w)
+			ros = wire.NewROSReturnResult(w)
 		case c.ReturnError != nil:
 			v, p := c.ReturnError, path+".ReturnError"
-			if err := checkEncodeComponentID(v.InvokeID, p+".InvokeID"); err != nil {
-				return nil, err
-			}
 			code, err := encodeCode(v.ErrorCode, p+".ErrorCode")
 			if err != nil {
 				return nil, err
 			}
-			w := wire.ReturnError{InvokeId: wire.NewInvokeIdPresent(big.NewInt(v.InvokeID)), Errcode: code}
+			w := wire.ReturnError{InvokeId: wire.NewInvokeIdPresentInt64(v.InvokeID), Errcode: code}
 			if v.Parameter != nil {
 				w.Parameter = &runtime.RawValue{Bytes: slices.Clone(v.Parameter)}
 			}
-			ros = wire.NewComponentPortionElemBasicROSBoundReturnError(w)
+			ros = wire.NewROSReturnError(w)
 		case c.Reject != nil:
 			v, p := c.Reject, path+".Reject"
 			id := wire.NewInvokeIdAbsent(struct{}{})
 			if v.InvokeID != nil {
-				if err := checkEncodeComponentID(*v.InvokeID, p+".InvokeID"); err != nil {
-					return nil, err
-				}
-				id = wire.NewInvokeIdPresent(big.NewInt(*v.InvokeID))
+				id = wire.NewInvokeIdPresentInt64(*v.InvokeID)
 			}
 			problem, err := encodeProblem(v.Problem, p+".Problem")
 			if err != nil {
 				return nil, err
 			}
-			ros = wire.NewComponentPortionElemBasicROSBoundReject(wire.Reject{InvokeId: id, Problem: problem})
+			ros = wire.NewROSReject(wire.Reject{InvokeId: id, Problem: problem})
 		}
-		out.Values[i] = wire.NewComponentPortionElemBoundBasicROS(ros)
+		out.Values[i] = wire.NewComponentBasicROS(ros)
 	}
 	return out, nil
 }
 
 // Q.773 Table 16 note b makes both fields mandatory when result is present.
 func encodeResult(v *ReturnResult, path string) (wire.ReturnResult, error) {
-	if err := checkEncodeComponentID(v.InvokeID, path+".InvokeID"); err != nil {
-		return wire.ReturnResult{}, err
-	}
-	w := wire.ReturnResult{InvokeId: wire.NewInvokeIdPresent(big.NewInt(v.InvokeID))}
+	w := wire.ReturnResult{InvokeId: wire.NewInvokeIdPresentInt64(v.InvokeID)}
 	if v.Result != nil {
 		code, err := encodeCode(v.Result.OpCode, path+".Result.OpCode")
 		if err != nil {
@@ -225,19 +216,19 @@ func encodeCode(v Code, path string) (wire.Code, error) {
 }
 
 // Q.773 clause 4.2.2.6 requires one problem alternative.
-func encodeProblem(v Problem, path string) (wire.OperationsRejectProblem, error) {
+func encodeProblem(v Problem, path string) (wire.RejectProblemChoice, error) {
 	count := set(v.General != nil) + set(v.Invoke != nil) + set(v.ReturnResult != nil) + set(v.ReturnError != nil)
 	if err := alternative(count, ErrProblemNoAlternative, ErrProblemMultipleAlternatives); err != nil {
-		return wire.OperationsRejectProblem{}, fieldError(path, err)
+		return wire.RejectProblemChoice{}, fieldError(path, err)
 	}
 	switch {
 	case v.General != nil:
-		return wire.NewOperationsRejectProblemGeneral(*v.General), nil
+		return wire.NewRejectProblemChoiceGeneral(*v.General), nil
 	case v.Invoke != nil:
-		return wire.NewOperationsRejectProblemInvoke(*v.Invoke), nil
+		return wire.NewRejectProblemChoiceInvoke(*v.Invoke), nil
 	case v.ReturnResult != nil:
-		return wire.NewOperationsRejectProblemReturnResult(*v.ReturnResult), nil
+		return wire.NewRejectProblemChoiceReturnResult(*v.ReturnResult), nil
 	default:
-		return wire.NewOperationsRejectProblemReturnError(*v.ReturnError), nil
+		return wire.NewRejectProblemChoiceReturnError(*v.ReturnError), nil
 	}
 }

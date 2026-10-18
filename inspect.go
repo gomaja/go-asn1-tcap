@@ -2,18 +2,17 @@ package tcap
 
 import (
 	"errors"
-	"fmt"
 
-	"github.com/gomaja/go-asn1/runtime/ber"
-	"github.com/gomaja/go-asn1/runtime/tag"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/tag"
 )
 
 // ITU-T Q.774 (06/97) Tables 5 and 7: inspection derives abnormal-procedure
 // context after a failure. It never accepts a message or publishes reports.
 // A failure it locates in the dialogue or component portion sets Err; limits
-// are the caller's decode limits.
-func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, limits ber.DecodeLimits) *ParseError {
+// are the caller's decode limits; failure is the codec's.
+func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, limits ber.DecodeLimits, failure error) *ParseError {
 	opts, _ = ber.StageDecodeReports(opts)
 	pe := &ParseError{Portion: PortionTransaction, ComponentIndex: -1}
 	t, err := ber.PeekTag(data)
@@ -28,54 +27,49 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	if !t.Constructed {
 		return pe
 	}
-	// go-asn1 validates the whole message and locates its first failure
-	// (ber.ElementError). Once the decode limits are exceeded, IDs are taken
-	// only from the top-level elements examined before that location.
-	validation := ber.ValidateBERElement(data, opts...)
-	if transactionOnly || errors.Is(validation, ber.ErrResourceLimit) {
-		contents, _ := inspectedContents(data)
-		var children messageChildren
-		for i := validatedPrefix(validation); i > 0 && len(contents) > 0; i-- {
-			_, n, _, err := ber.DecodeTLV(contents, opts...)
-			if err != nil {
-				break
-			}
-			children.add(contents[:n])
-			contents = contents[n:]
-		}
-		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, true, opts)
-		if !transactionOnly {
-			pe.Err = joinErrors(pe.Err, firstLimit(validation))
-		}
+	if transactionOnly {
 		return pe
 	}
-	_, n, value, err := inspectTLV(data, opts, limits, true)
-	if err != nil {
-		// Q.774 Table 7: the leading IDs may still be derivable when a later
-		// part of the message cannot be decoded.
-		contents, indefinite := inspectedContents(data)
-		children, scanErr := scanChildren(contents, indefinite, limits)
-		limit := firstLimit(err, scanErr)
-		if limit != nil {
-			children = children.prefix(validLeading(children.leading, opts))
-		}
-		pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, limit != nil, opts)
-		if limit != nil {
-			pe.Err = joinErrors(pe.Err, limit)
-		}
+	validation := ber.ValidateBERElement(data, ber.TrackTCAPForm(opts)...)
+	var rootFailure *ber.ElementError
+	if validation != nil && errors.As(validation, &rootFailure) && len(rootFailure.ChildIndexes()) == 0 {
+		pe.Err = joinErrors(pe.Err, firstLimit(validation))
 		return pe
 	}
-	children, err := scanChildren(value, false, limits)
-	limit := firstLimit(err)
-	if limit != nil {
-		children = children.prefix(validLeading(children.leading, opts))
+	if errors.Is(validation, ber.ErrResourceLimit) {
+		pe.Err = joinErrors(pe.Err, validation)
+		return pe
 	}
-	pe.OTID, pe.DTID = inspectedTIDs(children, pe.MessageType, limit != nil, opts)
-	if !transactionOnly && limit != nil {
-		pe.Err = joinErrors(pe.Err, limit)
+	_, n, value, err := ber.DecodeTLV(data, opts...)
+	if err == nil && n != len(data) {
+		return pe
 	}
 	if err != nil {
-		return pe
+		value, _ = inspectedContents(data)
+		_, tagBytes, tagErr := ber.DecodeTag(data)
+		if tagErr != nil {
+			return pe
+		}
+		length, indefinite, lengthBytes, lengthErr := ber.DecodeLength(data[tagBytes:])
+		if lengthErr != nil || !indefinite && length != len(data)-tagBytes-lengthBytes {
+			return pe
+		}
+	}
+	children, scanErr := scanChildren(value, false, limits)
+	if err != nil || scanErr != nil {
+		// A component portion that cannot be delimited is inspected from the
+		// codec's location only where the scan stopped at it as well: a
+		// malformed element after it breaks the transaction layout (Q.773
+		// (06/97) clause 3.1).
+		ok := false
+		if scanErr == nil || scanStoppedAt(children, scanErr, validation) {
+			children, ok = locatedComponentPrefix(value, validation, opts)
+		}
+		if !ok {
+			pe.Err = joinErrors(pe.Err, firstLimit(err, scanErr))
+			return pe
+		}
+		n = len(data)
 	}
 	// Q.773 clause 3.1 and Tables 3-7 establish the transaction portion
 	// before Q.774 clause 3.2.2.2 permits inspection of the other portions.
@@ -84,14 +78,18 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	}
 	var dialogue *Dialogue
 	for _, data := range children.leading {
-		t, _, value, _ := inspectTLV(data, opts, limits, false)
+		t, _, value, delimErr := ber.DecodeTLV(data, opts...)
+		if delimErr != nil {
+			t, _ = ber.PeekTag(data)
+			value, _ = inspectedContents(data)
+		}
 		switch t.Number {
 		case 11:
 			var w wire.DialoguePortion
 			err := w.UnmarshalBER(data, opts...)
 			var d *Dialogue
 			if err == nil {
-				d, err = decodeDialogue(&w, pe.MessageType, opts)
+				d, err = decodeDialogue(&w, pe.MessageType)
 			}
 			if errors.Is(err, ber.ErrResourceLimit) {
 				pe.Err = err
@@ -106,7 +104,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			var prefix []Component
 			index := 0
 			for len(value) > 0 {
-				ct, n, content, err := inspectTLV(value, opts, limits, false)
+				ct, n, content, err := ber.DecodeTLV(value, opts...)
 				if errors.Is(err, ber.ErrResourceLimit) {
 					pe.Err = err
 					return pe
@@ -129,7 +127,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 				} else {
 					var w wire.Component
 					if err = w.UnmarshalBER(value[:n], opts...); err == nil {
-						c, err = decodeComponent(componentValue(w), fmt.Sprintf("Components[%d]", index), opts)
+						c, err = decodeComponent(w)
 					}
 				}
 				if errors.Is(err, ber.ErrResourceLimit) {
@@ -150,14 +148,105 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			}
 			// Q.773 clause 3.1: ComponentPortion has SIZE (1..MAX).
 			if index == 0 {
-				if _, err := wire.UnmarshalBERComponentPortion(data, opts...); err != nil {
+				var portion wire.ComponentPortion
+				if err := portion.UnmarshalBER(data, opts...); err != nil {
 					pe.Portion, pe.Err = PortionComponent, err
 					return pe
 				}
 			}
 		}
 	}
+	// The transaction portion is sound and the portions decode on their own,
+	// so a codec refusal located at the dialogue portion is a rule of the
+	// whole message, such as Q.773 clause 4.2.3.
+	if isDialogueFailure(data, failure) {
+		pe.Portion = PortionDialogue
+	}
 	return pe
+}
+
+// isDialogueFailure uses the codec's wire location rather than its ASN.1
+// path text. A single child index identifies a direct child of the message;
+// Q.773 (06/97) clause 4.2.3 assigns APPLICATION 11 to the dialogue portion.
+func isDialogueFailure(data []byte, failure error) bool {
+	var validation *ber.ValidationError
+	if !errors.As(failure, &validation) || len(validation.ChildIndexes) != 1 || validation.Offset == nil {
+		return false
+	}
+	offset := *validation.Offset
+	if offset < 0 || offset >= len(data) {
+		return false
+	}
+	t, err := ber.PeekTag(data[offset:])
+	return err == nil && t.Class == tag.ClassApplication && t.Constructed && t.Number == 11
+}
+
+// scanStoppedAt reports whether a scan that failed with scanErr stopped at
+// the child of the message that holds the codec's failure. A malformed child
+// is kept as the last one; at a decode limit, the child being read is not.
+func scanStoppedAt(children messageChildren, scanErr, failure error) bool {
+	var location *ber.ElementError
+	if !errors.As(failure, &location) || len(location.ChildIndexes()) == 0 {
+		return false
+	}
+	stopped := children.count - 1
+	if errors.Is(scanErr, ber.ErrResourceLimit) {
+		stopped = children.count
+	}
+	return location.ChildIndexes()[0] == stopped
+}
+
+// locatedComponentPrefix exposes only the leading children and the component
+// portion identified by the codec's failure location. It never delimits a
+// malformed container or accepts it as a complete BER element.
+// ITU-T Q.774 (06/97) clause 3.2.2.2 and Table 5 require the first failing
+// component even when a later component prevents delimiting its container.
+func locatedComponentPrefix(contents []byte, failure error, opts []ber.DecodeOption) (messageChildren, bool) {
+	var children messageChildren
+	// Data that ends inside the message leaves its transaction portion
+	// unestablished (ITU-T Q.774 (06/97) clause 3.3.4).
+	var location *ber.ElementError
+	if errors.Is(failure, ber.ErrTruncated) || !errors.As(failure, &location) || len(location.ChildIndexes()) < 2 {
+		return children, false
+	}
+	index := location.ChildIndexes()[0]
+	if index < 0 || index >= leadingChildren {
+		return children, false
+	}
+	for i := 0; i <= index && len(contents) > 0; i++ {
+		t, err := ber.PeekTag(contents)
+		if err != nil {
+			return children, false
+		}
+		if i == index {
+			// X.690 (02/2021) clause 8.1.3.6 requires decoding the contents
+			// to find an indefinite length. Q.774 clause 3.2.2.2 and Table 5
+			// require inspecting earlier components when a later one is malformed.
+			if t.Class != tag.ClassApplication || !t.Constructed || t.Number != 12 {
+				return children, false
+			}
+			if _, _, _, err := ber.DecodeTLV(contents, opts...); err == nil {
+				return children, false
+			}
+			_, tagBytes, err := ber.DecodeTag(contents)
+			if err != nil {
+				return children, false
+			}
+			_, indefinite, _, err := ber.DecodeLength(contents[tagBytes:])
+			if err != nil || !indefinite {
+				return children, false
+			}
+			children.add(contents)
+			return children, true
+		}
+		_, n, _, err := ber.DecodeTLV(contents, opts...)
+		if err != nil {
+			return children, false
+		}
+		children.add(contents[:n])
+		contents = contents[n:]
+	}
+	return children, false
 }
 
 // messageChildren is what inspection keeps of the immediate children of a
@@ -174,37 +263,6 @@ type messageChildren struct {
 // A sound transaction portion has at most four elements (Q.773 (06/97) clause
 // 3.1, Continue); inspection keeps one more to see that a message has more.
 const leadingChildren = 5
-
-// prefix keeps only the first n leading children, the elements from which
-// IDs may be taken at their positions once the decode limits are exceeded.
-func (c messageChildren) prefix(n int) messageChildren {
-	c.leading = c.leading[:min(n, len(c.leading))]
-	return c
-}
-
-// validatedPrefix returns the number of top-level elements of a message that
-// ber.ValidateBERElement examined within the limits before the element at
-// which err, its result, locates a failure. Without a location there are none;
-// go-asn1 locates a MaxWork failure at the root: https://github.com/gomaja/go-asn1/issues/155.
-func validatedPrefix(err error) int {
-	var located *ber.ElementError
-	if !errors.As(err, &located) || len(located.ChildIndexes()) == 0 {
-		return 0
-	}
-	return located.ChildIndexes()[0]
-}
-
-// validLeading returns how many of the leading children, in order, are valid
-// within the decode limits, as ber.ValidateBERElement checks them. It bounds
-// the IDs taken at their positions when the inspection meets a limit itself.
-func validLeading(leading [][]byte, opts []ber.DecodeOption) int {
-	for i, child := range leading {
-		if ber.ValidateBERElement(child, opts...) != nil {
-			return i
-		}
-	}
-	return len(leading)
-}
 
 func (c *messageChildren) add(child []byte) {
 	if t, err := ber.PeekTag(child); err == nil && t.Class == tag.ClassApplication && (t.Number == 8 || t.Number == 9) {
@@ -250,7 +308,6 @@ func scanChildren(data []byte, indefinite bool, limits ber.DecodeLimits) (messag
 type scanBudget struct {
 	limits         ber.DecodeLimits
 	elements, work int
-	messageRoot    bool
 }
 
 // elementLength returns the length of the element at the start of data. A
@@ -285,11 +342,7 @@ func (b *scanBudget) elementLength(data []byte) (int, error) {
 			// X.690 clause 8.1.3.2 a): a primitive encoding has a definite length.
 			return 0, ber.ErrInvalidLength
 		case indefinite:
-			ancestors := 1
-			if b.messageRoot {
-				ancestors = 0
-			}
-			if depth++; ancestors+depth > b.limits.MaxDepth {
+			if depth++; 1+depth > b.limits.MaxDepth {
 				return 0, ber.ErrResourceLimit
 			}
 		case length > len(data)-pos:
@@ -352,7 +405,7 @@ func soundTransaction(kept messageChildren, mt MessageType, opts []ber.DecodeOpt
 			return false
 		}
 		id, ok := transactionIDValue(children[pos], opts)
-		if !ok || len(id) < 1 && !ber.ConstraintToleranceEnabled(opts) {
+		if !ok || len(id) < 1 && !ber.ToleranceEnabled(opts) {
 			return false
 		}
 		pos++
@@ -386,36 +439,6 @@ func applicationChild(data []byte, number int, opts []ber.DecodeOption) bool {
 	return err == nil && t.Class == tag.ClassApplication && t.Constructed && t.Number == number
 }
 
-// Q.774 Table 7 derives IDs only at Q.773 clause 3.1 positions; UNKNOWN
-// messages admit unique first-level IDs. Duplicates are not derivable. When
-// the message exceeds the decode limits, children holds only the elements
-// examined within them, the IDs at their positions are taken without looking
-// for repetitions, and an UNKNOWN message has none.
-func inspectedTIDs(children messageChildren, mt MessageType, limited bool, opts []ber.DecodeOption) (TransactionID, TransactionID) {
-	var ids [2]TransactionID
-	for i := range ids {
-		var element []byte
-		if limited {
-			if pos := tidPosition(mt, i); pos >= 0 && pos < len(children.leading) {
-				element = children.leading[pos]
-			}
-		} else if children.idCount[i] == 1 && (mt == "" || tidPosition(mt, i) == children.idPos[i]) {
-			element = children.ids[i]
-		}
-		if element == nil {
-			continue
-		}
-		t, err := ber.PeekTag(element)
-		if err != nil || t.Class != tag.ClassApplication || t.Number != 8+i {
-			continue
-		}
-		if id, ok := transactionIDValue(element, opts); ok {
-			ids[i] = derivableTID(id, ber.ConstraintToleranceEnabled(opts))
-		}
-	}
-	return ids[0], ids[1]
-}
-
 // tidPosition returns the position that Q.773 clause 3.1 gives the OTID
 // (i is 0) or the DTID (i is 1) among the elements of a message of type mt,
 // or -1.
@@ -433,44 +456,21 @@ func tidPosition(mt MessageType, i int) int {
 
 // transactionIDValue decodes the BER string forms in ITU-T X.690
 // (02/2021) clause 8.7 with the caller's options. Q.773 clause 3.1 limits
-// the resulting transaction ID to 1..4 octets unless constraints are tolerated.
+// the resulting transaction ID to 1..4 octets unless violations are tolerated.
 func transactionIDValue(element []byte, opts []ber.DecodeOption) ([]byte, bool) {
+	opts = ber.TrackTCAPForm(opts)
+	if !ber.ToleranceEnabled(opts) && ber.ValidateBERElement(element, opts...) != nil {
+		return nil, false
+	}
 	t, n, value, err := ber.DecodeTLV(element, opts...)
-	if err != nil || n != len(element) {
+	if err != nil || n != len(element) || t.Class != tag.ClassApplication || t.Number != 8 && t.Number != 9 {
 		return nil, false
 	}
 	id, err := ber.DecodeImplicitOctetStringValue(t.Constructed, value, opts...)
-	if err != nil {
-		return nil, false
-	}
-	if !ber.ConstraintToleranceEnabled(opts) && (len(id) < 1 || len(id) > 4) {
+	if err != nil || !ber.ToleranceEnabled(opts) && (len(id) < 1 || len(id) > 4) {
 		return nil, false
 	}
 	return id, true
-}
-
-// inspectTLV delimits malformed indefinite children so Q.774 Table 5 can
-// locate the first failing component. DecodeTLV checks nested universal forms
-// only in indefinite values: https://github.com/gomaja/go-asn1/issues/152.
-// This fallback goes once DecodeTLV delimits both length forms alike.
-func inspectTLV(data []byte, opts []ber.DecodeOption, limits ber.DecodeLimits, messageRoot bool) (tag.Tag, int, []byte, error) {
-	t, n, value, err := ber.DecodeTLV(data, opts...)
-	if err == nil || errors.Is(err, ber.ErrResourceLimit) {
-		return t, n, value, err
-	}
-	n, scanErr := (&scanBudget{limits: limits, messageRoot: messageRoot}).elementLength(data)
-	if scanErr != nil {
-		return t, 0, nil, err
-	}
-	t, err = ber.PeekTag(data)
-	if err != nil {
-		return t, 0, nil, err
-	}
-	value, indefinite := inspectedContents(data[:n])
-	if indefinite {
-		value = value[:len(value)-2]
-	}
-	return t, n, value, nil
 }
 
 // firstLimit returns the first of errs that is a decode limit, or nil.
@@ -529,18 +529,19 @@ func inspectedComponentType(t tag.Tag) ComponentType {
 
 // Q.773 clause 4.2.2.2 and Q.774 Table 5: derive only a valid first INTEGER
 // of a constructed component (Q.773 Table 19); content is its contents.
-// With constraint tolerance, a value outside -128..127 that Parse accepts is
+// With tolerance, a value outside -128..127 that Parse accepts is
 // derivable as well.
 func derivableInvokeID(content []byte, opts []ber.DecodeOption) *int64 {
-	t, _, value, err := ber.DecodeTLV(content, opts...)
-	if err != nil || t.Class != tag.ClassUniversal || t.Number != tag.TagInteger || t.Constructed {
+	_, n, _, err := ber.DecodeTLV(content, opts...)
+	if err != nil {
 		return nil
 	}
-	n, err := ber.DecodeIntegerValue(value)
-	if err != nil || (n < -128 || n > 127) && !ber.ConstraintToleranceEnabled(opts) {
+	var id wire.TCInvokeIdSet
+	if err := id.UnmarshalBER(content[:n], opts...); err != nil || id.Present == nil || !id.Present.IsInt64() {
 		return nil
 	}
-	return &n
+	value := id.Present.Int64()
+	return &value
 }
 
 func inspectComponent(data []byte, index int, opts []ber.DecodeOption) (*int64, ComponentType) {

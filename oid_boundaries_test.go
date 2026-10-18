@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
-	"github.com/gomaja/go-asn1/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 )
 
 func TestWideOIDWireRoundTrip(t *testing.T) {

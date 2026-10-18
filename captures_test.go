@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
@@ -91,8 +91,12 @@ func TestCaptures(t *testing.T) {
 				assertSameMessage(t, msg, again)
 				return
 			}
-			if hex.EncodeToString(out) != c.Hex {
-				t.Errorf("Marshal:\n got %x\nwant %s", out, c.Hex)
+			want := c.Hex
+			if expected, ok := captureMarshalEncodings[c.Name]; ok {
+				want = expected
+			}
+			if hex.EncodeToString(out) != want {
+				t.Errorf("Marshal:\n got %x\nwant %s", out, want)
 			}
 		})
 	}

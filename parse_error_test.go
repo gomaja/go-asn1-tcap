@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
@@ -196,10 +196,11 @@ func TestParseErrorWrapping(t *testing.T) {
 	if !errors.As(wrapped, &pe) {
 		t.Fatal("errors.As(*tcap.ParseError) failed through wrapping")
 	}
-	if !errors.Is(wrapped, tcap.ErrInvalidLinkedID) {
-		t.Error("errors.Is(ErrInvalidLinkedID) failed through wrapping")
+	var validation *ber.ValidationError
+	if !errors.As(wrapped, &validation) || !errors.Is(wrapped, ber.ErrInvalidValue) {
+		t.Error("codec ValidationError failed through wrapping")
 	}
-	if pe.Unwrap() != pe.Err || !errors.Is(pe.Err, tcap.ErrInvalidLinkedID) {
+	if pe.Unwrap() != pe.Err || !errors.Is(pe.Err, ber.ErrInvalidValue) {
 		t.Errorf("Unwrap = %v, Err = %v", pe.Unwrap(), pe.Err)
 	}
 	if errors.Is(wrapped, tcap.ErrMissingInvokeID) {
@@ -207,9 +208,9 @@ func TestParseErrorWrapping(t *testing.T) {
 	}
 
 	_, err = tcap.Parse(hx(corpusHex(t, "negative-otid-5")))
-	var ce *ber.ConstraintError
+	var ce *ber.ValidationError
 	if !errors.As(fmt.Errorf("outer: %w", err), &ce) {
-		t.Errorf("errors.As(*ber.ConstraintError) failed through wrapping: %v", err)
+		t.Errorf("errors.As(*ber.ValidationError) failed through wrapping: %v", err)
 	}
 
 	// A FieldError from Marshal, likewise.

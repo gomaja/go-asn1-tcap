@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"slices"
 
-	"github.com/gomaja/go-asn1/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 )
 
 // ITU-T Q.773 (06/97) clause 4.2.3 carries user data without transferring ownership.
@@ -23,9 +23,8 @@ func cloneBigInt(v *big.Int) *big.Int {
 	return new(big.Int).Set(v)
 }
 
-// cloneBits leaves the value as given. The encoders currently treat bits after
-// BitLength differently: https://github.com/gomaja/go-asn1/issues/154.
-// ITU-T X.690 (02/2021) clause 8.6.2 governs the encoded BIT STRING.
+// cloneBits copies the octets. The codec clears unused bits when encoding
+// without changing these octets (ITU-T X.690 (02/2021) clause 8.6.2.4).
 func cloneBits(v runtime.BitString) runtime.BitString {
 	v.Bytes = slices.Clone(v.Bytes)
 	return v

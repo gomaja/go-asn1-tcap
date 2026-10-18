@@ -170,7 +170,7 @@ userAbort := &tcap.Abort{DTID: peerTID, Dialogue: tcap.NewUserAbortDialogue(user
 providerAbort := &tcap.Abort{DTID: peerTID, Dialogue: tcap.NewProviderAbortDialogue()}
 
 // Abort by the transaction sub-layer.
-pAbort := &tcap.Abort{DTID: peerTID, PAbortCause: new(wire.PAbortCauseUnrecognizedTransactionID)}
+pAbort := &tcap.Abort{DTID: peerTID, PAbortCause: new(wire.PAbortCauseUnrecognizedTransactionIDValue())}
 ```
 
 (`wire` is `github.com/gomaja/go-asn1/telecom/ss7/tcap`, which defines the
@@ -179,24 +179,41 @@ values of TCAP protocol elements.)
 ### Errors and abnormal procedures
 
 `Marshal` applies the sender rules: the ASN.1 of Q.773 and the dialogue PDUs
-that each message type may carry (Q.774 Table 3). What it encodes itself uses
-definite lengths, in the short form below 128 octets and otherwise in the
-fewest octets as Q.773 clause 4.1.1 requires of definite lengths, and
-primitive strings. Parameters are sent as given. `Parse` applies the
-receiver rules: it accepts any valid BER encoding of a TCAP message and
-rejects everything else, including a dialogue PDU that the message type
-cannot carry. Rules that depend on the transaction or dialogue state are left
-to the stack built on this package.
+that each message type may carry (Q.774 Table 3). Transaction and dialogue
+fields use definite lengths, in the short form below 128 octets and otherwise
+in the fewest octets, and primitive strings (Q.773 clause 4.1.1). Parameters
+retain their supplied bytes and must pass the same checks on lengths and
+string forms.
+
+`Parse` applies the receiver rules. By default it accepts BER with the
+restrictions of Q.773 clause 4.1.1: lengths below 128 octets in the short
+form, long-form lengths in the fewest octets, and OCTET STRING and BIT STRING
+values in primitive form. Indefinite lengths of constructed values are
+accepted. `WithTolerance` also accepts other valid BER encodings and values
+outside ASN.1 constraints, and records each violation when parsing succeeds.
+Both
+modes enforce Q.774 Table 3: AARQ only in Begin; AARE with result accepted in
+Continue or End; AARE with another result, or ABRT, in Abort; AUDT only in
+Unidirectional. The Table 3 check allows Opaque in any message. Rules that
+depend on the transaction or dialogue state are left to the stack built on
+this package.
 
 - ASN.1 size and value constraints, such as a transaction ID of 5 octets or an
-  invoke ID of 200, are `*ber.ConstraintError` (`errors.As`).
+  invoke ID of 200, are `*ber.ValidationError` (`errors.As`).
 - Malformed BER, including parameter and EXTERNAL single-ASN1-type bytes,
   returns codec errors such as `ber.ErrExtraData`, `ber.ErrTruncated`,
   `ber.ErrInvalidTag` or `*ber.ElementError`.
-- TCAP rules have an `Err` sentinel (`errors.Is`), for example
-  `tcap.ErrUnexpectedDialoguePDU`.
+- The rules this package checks itself have an `Err` sentinel (`errors.Is`),
+  for example `tcap.ErrUnexpectedDialoguePDU`. Other codec failures, such as an
+  unexpected tag or a missing field, keep the codec's error and match no
+  sentinel of this package.
 - `Marshal` reports rules checked here in a `*tcap.FieldError`. Codec errors
-  retain their generated ASN.1 paths and causes, including `*ber.ConstraintError`.
+  retain their generated ASN.1 paths and causes, including `*ber.ValidationError`.
+- When the codec cannot decode a message, its error is a `*wire.DecodeError`
+  with an ASN.1 path, the transaction IDs validated before the failure, and the
+  cause. `errors.As` reaches it through `*tcap.ParseError`, unless `Parse`
+  locates the failing dialogue portion or component itself; the error then
+  describes that element alone.
 - Every `Parse` error caused by the data is a `*tcap.ParseError` that tells a
   TCAP stack how to react, as required by Q.774: the message type, the
   transaction IDs that could be derived from where the message type carries
@@ -230,30 +247,48 @@ if errors.As(err, &perr) {
 }
 ```
 
-`tcap.WithConstraintTolerance` makes `Parse` accept values outside their
-ASN.1 constraints and record them in a `ber.ViolationLog`, for monitoring
-traffic that does not conform. `Marshal` stays strict.
+`tcap.WithTolerance` requires a non-nil `*ber.ViolationLog` from
+`github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber`. Reports are published
+only when `Parse` succeeds. `Marshal` takes no options and encodes strictly.
 
-The codec checks Invoke IDs. This package checks linked IDs and the invoke
-IDs of ReturnResult, ReturnError and Reject against −128..127 (ITU-T Q.773
-(06/97) clauses 3.1 and 4.2.2.2), because the ASN.1 of Q.773 Annex A
-constrains only the ID of an Invoke. `tcap.WithConstraintTolerance` makes
-`Parse` accept and record out-of-range IDs of both kinds.
+The codec checks that every component ID is present where required and lies
+in −128..127 (Q.773 clause 4.2.2.2). Under `WithTolerance`, an ID that does
+not fit in an `int64` returns `tcap.ErrUnrepresentableValue`, and a NULL ID
+where one is required returns `tcap.ErrMissingInvokeID` or
+`tcap.ErrInvalidLinkedID`.
+
+The codec decodes the dialogue-as and uniDialogue-as abstract syntaxes into
+AARQ, AARE, ABRT and AUDT; a dialogue portion in any other abstract syntax is
+an `Opaque` EXTERNAL. The codec also applies Q.773 clause 4.2.3: a
+Unidirectional carries AUDT, and the other messages do not. Under
+`WithTolerance`, `Parse` accepts a Unidirectional with an `Opaque` dialogue
+portion and records the violation; Table 3 rejects every other misplaced
+dialogue PDU in both modes. When `Marshal` encodes an AARQ, AARE or AUDT, it
+leaves out a protocol-version equal to `{version1}`, its DEFAULT. When it
+encodes a BIT STRING, it clears the unused bits of the last octet without
+changing the caller's value; an invalid bit length is rejected.
+
+Parameters and the single-ASN1-type contents of an EXTERNAL keep the BER
+bytes they were given or received. `Parse` and `Marshal` check the lengths
+inside them, and the form of every universal OCTET STRING and BIT STRING,
+against Q.773 clause 4.1.1. They cannot check the form of a string under
+another tag, whose type only the TC-user knows, nor the octet-aligned and
+arbitrary encodings of an EXTERNAL. A message parsed with `WithTolerance`
+whose parameters or EXTERNAL contents break clause 4.1.1 does not marshal
+until the TC-user corrects them; the transaction and dialogue fields are
+encoded afresh and need no correction.
 
 `OID` is a string type, so application context names can be constants.
 `ParseOID` and `Marshal` validate OIDs with go-asn1, which accepts arcs of
 any size; `OID.Arcs()` returns `tcap.ErrUnrepresentableValue` for an arc that
-does not fit in a `uint64`. BIT STRING values are encoded as given, and the
-codec rejects invalid ones. `Parse` clears the unused bits it receives
-(ITU-T X.690 (02/2021) clause 8.6.2.2), so a parsed message can be
-marshalled again.
+does not fit in a `uint64`.
 
-When `Parse` fails on a decode limit, a transaction ID is derived only if it
-and the elements before it are valid and within the limits as go-asn1 counts
-them; go-asn1 locates the limit with a `ber.ElementError`. An input longer
-than `MaxWork`, or a limit that go-asn1 reports without a location, yields no
-IDs. A message that decoded completely keeps its IDs when the dialogue PDU
-inside its EXTERNAL exceeds the limits.
+Decode limits apply to decoding and to the inspection that follows a failure.
+When a limit stops decoding, `Parse` keeps only the transaction IDs validated
+before the place where the limit was reached. It takes transaction IDs from
+`wire.DecodeError.Prefix`, and finds them itself for a failure that the codec
+does not locate, a message type that is not recognized, and a transaction ID
+accepted under `WithTolerance`.
 
 ### Subpackages
 
@@ -287,8 +322,9 @@ inside its EXTERNAL exceeds the limits.
 
 **Components**
 
-- Invoke IDs are `int64`, checked against −128..127. `LinkedID` is now encoded
-  as `[0] IMPLICIT INTEGER` and a received linked ID decodes.
+- Invoke IDs are `int64`; the codec checks them against −128..127.
+  `LinkedID` is encoded as `[0] IMPLICIT INTEGER` and a received linked ID
+  decodes.
 - Operation and error codes are `Code` values: `LocalCode(n)` or
   `GlobalCode(oid)`.
 - `ReturnResult.OpCode` and `Parameter` moved into `ReturnResult.Result`.
@@ -303,20 +339,26 @@ inside its EXTERNAL exceeds the limits.
   `*ABRT`; `Unidirectional` (`*AUDT`) and `Opaque` are new. `DialogAsId` is
   gone: the abstract syntax follows from the PDU.
 - Application context names are `OID` strings such as `"0.4.0.0.1.0.20.3"`,
-  not `[]uint64`. `ProtocolVersion` is a `*runtime.BitString` (nil means the
-  default `{version1}`; `ProtocolVersion1()` sets it explicitly).
+  not `[]uint64`. `ProtocolVersion` is a `*runtime.BitString` from
+  `github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime`. Nil means the default
+  `{version1}`. `ProtocolVersion1()` returns that value; `Marshal` leaves
+  it out when encoding an AARQ, AARE or AUDT.
 - User information is `[]External`, not concatenated bytes.
 - `NewDialogueResponseFromDialogueRequest` is `NewAcceptDialogue`.
 
 **Errors and encoding**
 
 - `ErrInvalidTransactionID` and `ErrInvalidInvokeID` are reported as
-  `*ber.ConstraintError`; `ValidationError` is `FieldError`; `ParseError`
-  carries the protocol context described above.
-- `Parse` no longer falls back to a relaxed decoder: it accepts every valid
-  BER encoding of a TCAP message and rejects everything else.
-- `Marshal` uses definite lengths: a message received with indefinite lengths
-  is re-encoded with definite lengths.
+  `*ber.ValidationError` from the TCAP runtime. The old package type
+  `ValidationError` is `FieldError`; `ParseError` carries the protocol
+  context described above.
+- Strict `Parse` accepts the Q.773 clause 4.1.1 BER profile. `WithTolerance`
+  also accepts other valid BER encodings and values outside ASN.1
+  constraints, and records each violation when parsing succeeds. Both modes
+  enforce the dialogue PDU mapping of Q.774 Table 3.
+- `Marshal` uses definite lengths for transaction and dialogue fields.
+  Parameters and EXTERNAL single-ASN1-type contents retain their BER bytes
+  and must pass the Q.773 clause 4.1.1 checks.
 - `MinTransactionIDLength`, `MaxTransactionIDLength`, `MinInvokeID`,
   `MaxInvokeID`, `DefaultProtocolVersion` and `DefaultAcnPrefix` are gone.
 

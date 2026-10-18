@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gomaja/go-asn1/runtime"
-	"github.com/gomaja/go-asn1/runtime/ber"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
@@ -82,7 +82,7 @@ func FuzzParseError(f *testing.F) {
 		} {
 			var opts []tcap.ParseOption
 			if set.tolerant {
-				opts = append(opts, tcap.WithConstraintTolerance(&ber.ViolationLog{}))
+				opts = append(opts, tcap.WithTolerance(&ber.ViolationLog{}))
 			}
 			if set.limits != nil {
 				opts = append(opts, tcap.WithDecodeLimits(*set.limits))

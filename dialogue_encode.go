@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/gomaja/go-asn1/runtime"
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 )
 
 // ITU-T Q.773 (06/97) Tables 30-37 identify the dialogue abstract syntax.
@@ -29,13 +29,13 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 		if err != nil {
 			return nil, err
 		}
-		w := wire.DialoguePortion(e)
+		w, err := wire.NewDialoguePortionExternal(e)
+		if err != nil {
+			return nil, err
+		}
 		return &w, nil
 	}
 	var pdu wire.DialoguePDU
-	var data []byte
-	var err error
-	asid := wire.DialogueAsId()
 	switch {
 	case d.Request != nil:
 		v, path := d.Request, "Dialogue.Request"
@@ -49,7 +49,7 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 		}
 		w := wire.AARQApdu{ProtocolVersion: cloneBitsPointer(v.ProtocolVersion), ApplicationContextName: acn}
 		if ui != nil {
-			w.UserInformation = &wire.AARQApduUserInformation{Values: ui}
+			w.UserInformation = &wire.UserInformation{Values: ui}
 		}
 		pdu = wire.NewDialoguePDUDialogueRequest(w)
 	case d.Response != nil:
@@ -64,7 +64,7 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 		}
 		w := wire.AAREApdu{ProtocolVersion: cloneBitsPointer(v.ProtocolVersion), ApplicationContextName: acn, Result: v.Result}
 		if ui != nil {
-			w.UserInformation = &wire.AAREApduUserInformation{Values: ui}
+			w.UserInformation = &wire.UserInformation{Values: ui}
 		}
 		if v.ResultSourceDiagnostic.DialogueServiceUser != nil {
 			w.ResultSourceDiagnostic = wire.NewAssociateSourceDiagnosticDialogueServiceUser(*v.ResultSourceDiagnostic.DialogueServiceUser)
@@ -80,7 +80,7 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 		}
 		w := wire.ABRTApdu{AbortSource: v.AbortSource}
 		if ui != nil {
-			w.UserInformation = &wire.ABRTApduUserInformation{Values: ui}
+			w.UserInformation = &wire.UserInformation{Values: ui}
 		}
 		pdu = wire.NewDialoguePDUDialogueAbort(w)
 	case d.Unidirectional != nil:
@@ -95,19 +95,13 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 		}
 		w := wire.AUDTApdu{ProtocolVersion: cloneBitsPointer(v.ProtocolVersion), ApplicationContextName: acn}
 		if ui != nil {
-			w.UserInformation = &wire.AUDTApduUserInformation{Values: ui}
+			w.UserInformation = &wire.UserInformation{Values: ui}
 		}
 		uni := wire.NewUniDialoguePDUUnidialoguePDU(w)
-		data, err = uni.MarshalBER()
-		asid = wire.UniDialogueAsId()
+		portion := wire.NewDialoguePortionUniDialogue(uni)
+		return &portion, nil
 	}
-	if data == nil && err == nil {
-		data, err = pdu.MarshalBER()
-	}
-	if err != nil {
-		return nil, err
-	}
-	e := wire.DialoguePortion(runtime.External{DirectReference: asid, Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: runtime.RawValue{Bytes: data}})
+	e := wire.NewDialoguePortionDialogue(pdu)
 	return &e, nil
 }
 
