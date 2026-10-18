@@ -15,6 +15,17 @@ import (
 func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, limits ber.DecodeLimits, failure error) *ParseError {
 	opts, _ = ber.StageDecodeReports(opts)
 	pe := &ParseError{Portion: PortionTransaction, ComponentIndex: -1}
+	var decoded *wire.DecodeError
+	var prefix wire.TransactionPrefix
+	if errors.As(failure, &decoded) {
+		prefix = decoded.Prefix
+	}
+	var idCount [2]int
+	defer func() {
+		if decoded != nil {
+			decodeFailureIDs(pe, decoded, idCount)
+		}
+	}()
 	t, err := ber.PeekTag(data)
 	if err != nil {
 		return pe
@@ -31,21 +42,31 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		return pe
 	}
 	validation := ber.ValidateBERElement(data, ber.TrackTCAPForm(opts)...)
+	if errors.Is(validation, ber.ErrResourceLimit) {
+		// Only the codec's limit skips repeat counting. An inspection limit
+		// still permits counting immediate tags within the scan's budget.
+		children, _ := scanChildren(inspectedContents(data), limits)
+		idCount = children.idCount
+		pe.Err = joinErrors(pe.Err, validation)
+		return pe
+	}
+	_, n, value, err := ber.DecodeTLV(data, opts...)
+	if err != nil {
+		value = inspectedContents(data)
+	}
+	// ITU-T Q.774 (06/97) Table 7: count immediate ID tags even when the
+	// outer header is invalid or the last child cannot be delimited.
+	children, scanErr := scanChildren(value, limits)
+	idCount = children.idCount
 	var rootFailure *ber.ElementError
 	if validation != nil && errors.As(validation, &rootFailure) && len(rootFailure.ChildIndexes()) == 0 {
 		pe.Err = joinErrors(pe.Err, firstLimit(validation))
 		return pe
 	}
-	if errors.Is(validation, ber.ErrResourceLimit) {
-		pe.Err = joinErrors(pe.Err, validation)
-		return pe
-	}
-	_, n, value, err := ber.DecodeTLV(data, opts...)
 	if err == nil && n != len(data) {
 		return pe
 	}
 	if err != nil {
-		value = inspectedContents(data)
 		_, tagBytes, tagErr := ber.DecodeTag(data)
 		if tagErr != nil {
 			return pe
@@ -55,7 +76,6 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			return pe
 		}
 	}
-	children, scanErr := scanChildren(value, limits)
 	if err != nil || scanErr != nil {
 		// A component portion that cannot be delimited is inspected from the
 		// codec's location only where the scan stopped at it as well: a
@@ -73,11 +93,6 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	}
 	// Q.773 clause 3.1 and Tables 3-7 establish the transaction portion
 	// before Q.774 clause 3.2.2.2 permits inspection of the other portions.
-	var prefix wire.TransactionPrefix
-	var decoded *wire.DecodeError
-	if errors.As(failure, &decoded) {
-		prefix = decoded.Prefix
-	}
 	if pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, prefix, opts) {
 		return pe
 	}
@@ -256,10 +271,12 @@ func locatedComponentPrefix(contents []byte, failure error, opts []ber.DecodeOpt
 
 // messageChildren is what inspection keeps of the immediate children of a
 // message: the leading ones and their number, to establish the transaction
-// layout before inspecting dialogue and components (Q.773 (06/97) clause 3.1).
+// layout before inspecting dialogue and components (Q.773 (06/97) clause 3.1),
+// and immediate ID tag counts for derivability (Q.774 (06/97) Table 7).
 type messageChildren struct {
 	leading [][]byte
 	count   int
+	idCount [2]int
 }
 
 // A sound transaction portion has at most four elements (Q.773 (06/97) clause
@@ -267,6 +284,9 @@ type messageChildren struct {
 const leadingChildren = 5
 
 func (c *messageChildren) add(child []byte) {
+	if t, err := ber.PeekTag(child); err == nil && t.Class == tag.ClassApplication && (t.Number == 8 || t.Number == 9) {
+		c.idCount[t.Number-8]++
+	}
 	if c.count < leadingChildren {
 		c.leading = append(c.leading, child)
 	}
@@ -275,7 +295,8 @@ func (c *messageChildren) add(child []byte) {
 
 // The scan reads immediate children within the decode limits to establish
 // the transaction layout (ITU-T Q.773 (06/97) clause 3.1), keeping a malformed
-// final child so that it cannot hide an invalid layout.
+// final child so that it cannot hide an invalid layout or a repeated ID tag
+// (ITU-T Q.774 (06/97) Table 7).
 func scanChildren(data []byte, limits ber.DecodeLimits) (messageChildren, error) {
 	var children messageChildren
 	budget := scanBudget{limits: limits, elements: 1}

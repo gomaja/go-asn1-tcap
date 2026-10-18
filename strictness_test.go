@@ -73,7 +73,7 @@ func TestParseDecodeErrorPrefix(t *testing.T) {
 	for _, input := range []string{
 		"620a4801016c05a103020105",
 		"650d4801014901026c05a103020105",
-		// Prefix retains the leading ID before the later truncated duplicate.
+		// Table 7 policy suppresses the codec's ID when its tag repeats.
 		"6206480101480501",
 	} {
 		data := hx(input)
@@ -85,7 +85,11 @@ func TestParseDecodeErrorPrefix(t *testing.T) {
 		}
 		_, err := tcap.Parse(data)
 		var pe *tcap.ParseError
-		if !errors.As(err, &pe) || !bytes.Equal(pe.OTID, *want.Prefix.Otid) {
+		wantOTID := *want.Prefix.Otid
+		if input == "6206480101480501" {
+			wantOTID = nil
+		}
+		if !errors.As(err, &pe) || !bytes.Equal(pe.OTID, wantOTID) {
 			t.Fatalf("Parse = %v, want OTID %x", err, *want.Prefix.Otid)
 		}
 		// Err holds the codec's DecodeError only for a transaction failure.
@@ -97,7 +101,7 @@ func TestParseDecodeErrorPrefix(t *testing.T) {
 			t.Fatalf("DTID %x, want %x", pe.DTID, *want.Prefix.Dtid)
 		}
 		data[4] ^= 0xff
-		if pe.OTID[0] != 1 {
+		if pe.OTID != nil && pe.OTID[0] != 1 {
 			t.Fatal("ParseError ID aliases input")
 		}
 	}

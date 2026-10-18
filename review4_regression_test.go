@@ -69,7 +69,7 @@ func TestReview4TransactionIDTags(t *testing.T) {
 		{"End OTID at DTID position", "64054801026c00", "", ""},
 		{"Abort OTID at DTID position", "67054801024a00", "", ""},
 		{"Continue swapped IDs", "65084901024801016c00", "", ""},
-		{"Continue repeated OTID at DTID position", "65084801014801026c00", "01", ""},
+		{"Continue repeated OTID at DTID position", "65084801014801026c00", "", ""},
 	} {
 		for _, tolerant := range []bool{false, true} {
 			for _, maxElements := range []int{0, 2, 3} {
@@ -78,6 +78,10 @@ func TestReview4TransactionIDTags(t *testing.T) {
 					opts = append(opts, tcap.WithTolerance(&ber.ViolationLog{}))
 				}
 				wantOTID := tc.otid
+				// A codec decode-limit failure keeps Prefix without a repeat scan.
+				if maxElements != 0 && tc.name == "Continue repeated OTID at DTID position" {
+					wantOTID = "01"
+				}
 				_, err := tcap.Parse(hx(tc.input), opts...)
 				var pe *tcap.ParseError
 				if !errors.As(err, &pe) {

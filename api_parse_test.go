@@ -153,9 +153,9 @@ func TestParseParameterVerbatim(t *testing.T) {
 
 // TestParseOpaqueDialogue: a dialogue portion in an abstract syntax other
 // than dialogue-as-id and uniDialogue-as-id is kept as an opaque EXTERNAL,
-// every field exactly. Unresolved identification and syntax violations in
-// Begin or Unidirectional require tolerance (Q.773 clause 4.2.3; Q.774
-// Figure A.5, sheet 3).
+// every field exactly. Unresolved identification and Unidirectional syntax
+// violations require tolerance (Q.773 clause 4.2.3). Begin requires AARQ in
+// both modes (Q.774 Figure A.5, sheet 3).
 func TestParseOpaqueDialogue(t *testing.T) {
 	cases := []struct {
 		name, input string
@@ -173,16 +173,30 @@ func TestParseOpaqueDialogue(t *testing.T) {
 		{"in an End", tlv("64", hexDTID, tlv("6b", hexOpaqueExt)), *opaqueE()},
 		{"in a Unidirectional", tlv("61", tlv("6b", hexOpaqueExt), tlv("6c", hexInvoke)), *opaqueE()},
 	}
+	// Keep field-preservation coverage in End, where Opaque is permitted.
+	for _, c := range cases[:3] {
+		c.name = "End/" + c.name
+		c.input = "64" + c.input[2:4] + "49" + c.input[6:]
+		cases = append(cases, c)
+	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			_, strict := tcap.Parse(hx(c.input))
-			nonconforming := c.want.IndirectReference != nil || c.name == "in a Unidirectional" || hx(c.input)[0] == 0x62
+			begin := hx(c.input)[0] == 0x62
+			nonconforming := c.want.IndirectReference != nil || c.name == "in a Unidirectional"
 			var validation *ber.ValidationError
-			if nonconforming && !errors.As(strict, &validation) || !nonconforming && strict != nil {
+			if nonconforming && !errors.As(strict, &validation) || !nonconforming && begin && !errors.Is(strict, tcap.ErrUnexpectedDialoguePDU) || !nonconforming && !begin && strict != nil {
 				t.Fatalf("strict Parse = %v", strict)
 			}
 			var reports ber.ViolationLog
 			msg, err := tcap.Parse(hx(c.input), tcap.WithTolerance(&reports))
+			if begin {
+				var pe *tcap.ParseError
+				if msg != nil || !errors.Is(err, tcap.ErrUnexpectedDialoguePDU) || !errors.As(err, &pe) || pe.Portion != tcap.PortionDialogue || len(reports.Snapshot()) != 0 {
+					t.Fatalf("Begin/Opaque = %v, %v, reports %v", msg, err, reports.Snapshot())
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -502,8 +516,8 @@ func TestParseDoesNotAlias(t *testing.T) {
 		corpusHex(t, "abort-abrt-user-map-userabort"),
 		corpusHex(t, "continue-first-backward-aare-result"),
 		corpusHex(t, "end-error-global"),
-		"621c4804010203046b14281206032a030402010507036162638103010203",
-		"62134804010203046b0b280906032a0304820204f0",
+		"641c4904010203046b14281206032a030402010507036162638103010203",
+		"64134904010203046b0b280906032a0304820204f0",
 		"62374804010203046b1e281c0607001186050101018111600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203",
 		"62184804010203046c10a10e02010102012d3081050403010203",
 	}

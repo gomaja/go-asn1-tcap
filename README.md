@@ -151,9 +151,9 @@ tcap.Component{ReturnError: &tcap.ReturnError{
 
 ### Abort
 
-The dialogue portion of an Abort is an AARE that refuses the dialogue or an
-ABRT. The recipes fill in the values that ITU-T Q.774 (06/97) clause 3.2
-prescribes:
+The dialogue portion of an Abort is an AARE with result reject-permanent,
+an ABRT, or user information in another abstract syntax. The recipes fill in
+the values that ITU-T Q.774 (06/97) clause 3.2 prescribes:
 
 ```go
 // Refuse a dialogue whose application context is not supported, and offer
@@ -178,10 +178,13 @@ values of TCAP protocol elements.)
 
 ### Errors and abnormal procedures
 
-`Marshal` applies the sender rules: the ASN.1 of Q.773 and the dialogue PDUs
-that each message type may carry (Q.774 Table 3). Transaction and dialogue
-fields use definite lengths, in the short form below 128 octets and otherwise
-in the fewest octets, and primitive strings (Q.773 clause 4.1.1). Parameters
+`Marshal` applies the sender rules. The go-asn1 codec checks the ASN.1 of
+Q.773 Annex A and X.880, the encoding rules of X.680 and X.690, and Q.773
+clauses 4.1.1, 4.2.2.2 and 4.2.3. This package checks the dialogue PDUs
+and results that each message type may carry (Q.774 Table 3), the dialogue
+versions (clause 3.2.3), and whether values fit its Go model. Transaction and
+dialogue fields use definite lengths, in the short form below 128 octets and
+otherwise in the fewest octets, and primitive strings (Q.773 clause 4.1.1). Parameters
 retain their supplied bytes and must pass the same checks on lengths and
 string forms.
 
@@ -191,12 +194,24 @@ form, long-form lengths in the fewest octets, and OCTET STRING and BIT STRING
 values in primitive form. Indefinite lengths of constructed values are
 accepted. `WithTolerance` also accepts other valid BER encodings and values
 outside ASN.1 constraints, and records each violation when parsing succeeds.
-Both modes enforce Q.774 Table 3: AARQ only in Begin; AARE with result accepted in
-Continue or End; AARE with another result, or ABRT, in Abort; AUDT only in
-Unidirectional. Strict decoding and `Marshal` accept Opaque only in Continue,
-End and Abort. `WithTolerance` also accepts it in Begin and Unidirectional
-and records a syntax violation. Rules that depend on the transaction or
-dialogue state are left to the stack built on this package.
+This package applies the dialogue rules of ITU-T Q.774 (06/97) Table 3
+itself, in both `Parse` modes and in `Marshal`:
+
+- a Begin carries an AARQ (Figure A.5, sheet 3);
+- a Continue or an End carries an AARE with result accepted (Figure A.5,
+  sheet 7) or user information in another abstract syntax (clause 3.2.1.2);
+- an Abort carries an ABRT, an AARE with result reject-permanent (Table 3,
+  Note 3; clauses 3.2.1.2 and 3.2.3), or user information in another
+  abstract syntax (Q.773 clause 3.1).
+
+A misplaced dialogue PDU, including user information in a Begin, is
+`tcap.ErrUnexpectedDialoguePDU`; an AARE with any other result is
+`tcap.ErrUnexpectedDialogueResult`. The codec requires the AUDT in a
+Unidirectional and keeps its abstract syntax out of the other messages
+(Q.773 clause 4.2.3); under `WithTolerance`, `Parse` accepts a Unidirectional
+carrying another abstract syntax and records the violation, and `Marshal`
+refuses it. Rules that depend on transaction or dialogue state, such as
+whether a Continue or an End may still carry its AARE, are left to the stack.
 
 - ASN.1 size and value constraints, such as a transaction ID of 5 octets or an
   invoke ID of 200, are `*ber.ValidationError` (`errors.As`).
@@ -216,7 +231,7 @@ dialogue state are left to the stack built on this package.
   describes that element alone.
 - Every `Parse` error caused by the data is a `*tcap.ParseError` that tells a
   TCAP stack how to react, as required by Q.774: the message type, the
-  transaction IDs accepted by the codec under the active options, and the
+  transaction IDs derivable under this package's Table 7 policy, and the
   portion that failed. A failure in the transaction portion
   calls for an Abort with a P-Abort cause to the originating transaction ID,
   when it can be derived (clause 3.3.4, Table 7: an End or an Abort is only
@@ -252,19 +267,22 @@ if errors.As(err, &perr) {
 only when `Parse` succeeds. `Marshal` takes no options and encodes strictly.
 
 The codec checks that every component ID is present where required and lies
-in −128..127 (Q.773 clause 4.2.2.2). Under `WithTolerance`, an ID that does
-not fit in an `int64` returns `tcap.ErrUnrepresentableValue`, and a NULL ID
-where one is required returns `tcap.ErrMissingInvokeID` or
-`tcap.ErrInvalidLinkedID`.
+in −128..127 (Q.773 clause 4.2.2.2). This package uses `int64` for component
+IDs and local operation and error codes. Values outside that model return
+`tcap.ErrUnrepresentableValue`. Under `WithTolerance`, a NULL ID where this
+model requires an integer returns `tcap.ErrMissingInvokeID` or
+`tcap.ErrInvalidLinkedID`. For dialogue versions (Q.774 clause 3.2.3),
+`Marshal` requires an AARQ or AUDT to offer version1, and both Parse modes
+and `Marshal` require an AARE to select only version1. Received AARQ and
+AUDT versions are kept for the stack to answer.
 
 The codec decodes the dialogue-as and uniDialogue-as abstract syntaxes into
 AARQ, AARE, ABRT and AUDT; a dialogue portion in any other abstract syntax is
 an `Opaque` EXTERNAL. The codec requires uniDialogue-as with AUDT in a
-Unidirectional (Q.773 clause 4.2.3) and dialogue control syntax in a Begin
-(Q.774 Figure A.5, sheet 3). Continue, End and Abort may carry user information
-in another abstract syntax. Table 3 rejects misplaced dialogue PDUs in both
-modes. When `Marshal` encodes an AARQ, AARE or AUDT, a nil protocol-version is
-omitted and means the DEFAULT `{version1}`; a non-nil value is encoded,
+Unidirectional (Q.773 clause 4.2.3). This package enforces the Begin's AARQ
+requirement (Q.774 Figure A.5, sheet 3) and Table 3 placement and results in
+both modes. When `Marshal` encodes an AARQ, AARE or AUDT, a nil
+protocol-version is omitted and means the DEFAULT `{version1}`; a non-nil value is encoded,
 including `ProtocolVersion1()` as `80 02 07 80` (X.690 (02/2021) clause 8.9.3).
 When it encodes a BIT STRING, it clears the unused bits of the last octet
 without changing the caller's value (clause 8.6.2.4); an invalid bit length
@@ -288,10 +306,12 @@ does not fit in a `uint64`.
 Decode limits apply to decoding and to the inspection that follows a failure.
 On a codec failure, `Parse` copies transaction IDs from
 `wire.DecodeError.Prefix`: the IDs the decoder accepted under the active
-options. A leading accepted ID remains derivable when a duplicate follows or
-the message's header breaks Q.773 clause 4.1.1. An empty ID accepted with
-`WithTolerance` is non-nil. The codec's decode limits govern which IDs it
-accepts; the reported failure location does not determine the Prefix IDs.
+options. Q.774 Table 7 leaves it to the implementation which IDs are
+derivable: this package does not derive an OTID or DTID whose tag occurs more
+than once among the elements of the message, because an Abort sent to the
+wrong one could end an unrelated transaction at the peer. It looks for
+repeats within the decode limits, and not when the codec itself stopped at a
+limit. An empty ID accepted with `WithTolerance` is non-nil.
 
 ### Subpackages
 
@@ -358,7 +378,7 @@ accepts; the reported failure location does not determine the Prefix IDs.
 - Strict `Parse` accepts the Q.773 clause 4.1.1 BER profile. `WithTolerance`
   also accepts other valid BER encodings and values outside ASN.1
   constraints, and records each violation when parsing succeeds. Both modes
-  enforce the dialogue PDU mapping of Q.774 Table 3.
+  enforce the dialogue rules of Q.774 Table 3, which this package applies.
 - `Marshal` uses definite lengths for transaction and dialogue fields.
   Parameters and EXTERNAL single-ASN1-type contents retain their BER bytes
   and must pass the Q.773 clause 4.1.1 checks.

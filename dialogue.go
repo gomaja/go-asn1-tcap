@@ -18,14 +18,20 @@ import (
 // so that the sender rules apply (Q.773 clause 4.2.3).
 //
 // The dialogue PDUs a message may carry are those of ITU-T Q.774 (06/97)
-// Table 3: AARQ in a Begin; AARE with result accepted in a Continue or an End;
-// AARE with another result, or ABRT, in an Abort; AUDT in a Unidirectional.
-// These rules apply to strict and tolerant Parse and to Marshal. Strict
-// Parse and Marshal permit Opaque only in Continue, End and Abort. Begin
-// requires dialogue control syntax (Q.774 Figure A.5, sheet 3), and
-// Unidirectional requires uniDialogue-as with AUDT (Q.773 clause 4.2.3).
-// WithTolerance accepts Opaque in Begin and Unidirectional and records the
-// syntax violation.
+// Table 3, which this package applies in both Parse modes and in Marshal: an
+// AARQ in a Begin (Figure A.5, sheet 3); an AARE with result accepted in a
+// Continue or an End (Figure A.5, sheet 7); an AARE with result
+// reject-permanent, or an ABRT, in an Abort (Table 3, Note 3; clauses 3.2.1.2
+// and 3.2.3). Opaque is allowed in a Continue or an End (clause 3.2.1.2) and
+// in an Abort (Q.773 clause 3.1, DialoguePortion comment), not in a Begin.
+// The codec requires the AUDT in a Unidirectional (Q.773 clause 4.2.3); under
+// WithTolerance, Parse accepts Opaque there and records the violation, and
+// Marshal refuses it.
+//
+// This package also checks dialogue versions (Q.774 clause 3.2.3): Marshal
+// requires an AARQ or an AUDT to offer version1, and both Parse modes and
+// Marshal require an AARE to select only version1. The versions of a
+// received AARQ or AUDT are left to the stack to answer.
 type Dialogue struct {
 	Request        *AARQ
 	Response       *AARE

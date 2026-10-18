@@ -81,14 +81,14 @@ func TestReviewF1TransactionBeforePortions(t *testing.T) {
 func TestReviewF2DerivableTransactionIDs(t *testing.T) {
 	bad := tlv("6c", "a103020105")
 	cases := []struct{ name, input, otid, dtid string }{
-		{"duplicate DTID", "6509480101490102490103", "01", "02"},
-		{"duplicate OTID", tlv("62", "480101", "480102", bad), "01", ""},
+		{"duplicate DTID", "6509480101490102490103", "01", ""},
+		{"duplicate OTID", tlv("62", "480101", "480102", bad), "", ""},
 		{"unexpected End OTID", tlv("64", "490102", "480101", bad), "", "02"},
 		{"unexpected Begin DTID", tlv("62", "480101", "490102", bad), "01", ""},
 		{"misplaced Continue IDs", tlv("65", "490102", "480101", bad), "", ""},
 		{"Unidirectional IDs", tlv("61", "480101", "490102", bad), "", ""},
 		{"UNKNOWN IDs after another child", tlv("63", "4f00", "480101", "490102", bad), "", ""},
-		{"UNKNOWN duplicate IDs", tlv("63", "480101", "480102", "490103", "490104"), "01", ""},
+		{"UNKNOWN duplicate IDs", tlv("63", "480101", "480102", "490103", "490104"), "", ""},
 		{"constructed OTID", tlv("62", "680704020102040103", bad), "", ""},
 		{"indefinite OTID", tlv("62", "6880040201020401030000", bad), "", ""},
 		{"constructed DTID", tlv("64", "6903040102", bad), "", ""},
@@ -98,9 +98,9 @@ func TestReviewF2DerivableTransactionIDs(t *testing.T) {
 		{"truncated Begin child", "62074801016c05a103", "01", ""},
 		{"truncated Continue child", "650a4801014901026c05a103", "01", "02"},
 		{"truncated End child", "64074901026c05a103", "", "02"},
-		{"duplicate before truncated child", "620a4801014801026c05a103", "01", ""},
-		{"truncated duplicate OTID", "6206480101480501", "01", ""},
-		{"truncated duplicate DTID", "6509480101490102490503", "01", "02"},
+		{"duplicate before truncated child", "620a4801014801026c05a103", "", ""},
+		{"truncated duplicate OTID", "6206480101480501", "", ""},
+		{"truncated duplicate DTID", "6509480101490102490503", "01", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
