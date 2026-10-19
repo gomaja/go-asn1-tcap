@@ -262,8 +262,10 @@ if errors.As(err, &perr) {
 }
 ```
 
-`tcap.WithTolerance` requires a non-nil `*ber.ViolationLog` from
-`github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber`. Reports are published
+`tcap.WithTolerance` requires a non-nil `*tcap.ViolationLog`, whose
+`Snapshot` returns `tcap.Violation` records; `tcap.WithDecodeLimits` takes a
+`tcap.DecodeLimits`, starting from `tcap.DefaultDecodeLimits()`. These are
+go-asn1's own types, so no import of go-asn1 is needed. Reports are published
 only when `Parse` succeeds. `Marshal` takes no options and encodes strictly.
 
 The codec checks that every component ID is present where required and lies

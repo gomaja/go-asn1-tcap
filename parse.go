@@ -8,15 +8,50 @@ import (
 	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
+// ViolationLog records what Parse accepts under WithTolerance. A zero value
+// is ready for use, and Snapshot returns the records in the order they were
+// reported. It is the codec's own type, named here so that a caller needs no
+// import of go-asn1; so are Violation, ViolationKind, RuleRef and
+// DecodeLimits.
+type ViolationLog = ber.ViolationLog
+
+// Violation is one record of a ViolationLog: the kind and rule that were
+// broken, where (Path, Offset and ChildIndexes), and what was observed.
+type Violation = ber.Violation
+
+// ViolationKind tells an ASN.1 constraint from a protocol text rule.
+type ViolationKind = ber.ViolationKind
+
+// The kinds of a Violation.
+const (
+	// ASN1Constraint is a constraint of the ASN.1 (ITU-T X.680 (02/2021)
+	// clause 51).
+	ASN1Constraint = ber.ASN1Constraint
+	// ProtocolRule is a protocol text rule, such as ITU-T Q.773 (06/97)
+	// clause 4.1.1.
+	ProtocolRule = ber.ProtocolRule
+)
+
+// RuleRef names the document, edition and clause of a broken rule.
+type RuleRef = ber.RuleRef
+
+// DecodeLimits bounds the work Parse spends on its input; see
+// WithDecodeLimits.
+type DecodeLimits = ber.DecodeLimits
+
+// DefaultDecodeLimits returns the limits Parse uses when WithDecodeLimits is
+// not given.
+func DefaultDecodeLimits() DecodeLimits { return ber.DefaultDecodeLimits() }
+
 // ParseOption configures Parse.
 type ParseOption interface {
 	applyParseOption(*parseConfig)
 }
 
 type parseConfig struct {
-	log      *ber.ViolationLog
+	log      *ViolationLog
 	tolerant bool
-	limits   *ber.DecodeLimits
+	limits   *DecodeLimits
 }
 
 // WithTolerance makes Parse accept other valid BER representations and
@@ -27,14 +62,14 @@ type parseConfig struct {
 // single-ASN1-type contents that violate Q.773 clause 4.1.1 must be
 // corrected before encoding. log must not be nil.
 // If supplied more than once, the last WithTolerance wins.
-func WithTolerance(log *ber.ViolationLog) ParseOption {
+func WithTolerance(log *ViolationLog) ParseOption {
 	return toleranceParseOption{log}
 }
 
 // WithDecodeLimits replaces the decoding limits of go-asn1, which bound the
 // work spent on untrusted input. Zero fields keep the defaults of
-// ber.DefaultDecodeLimits.
-func WithDecodeLimits(limits ber.DecodeLimits) ParseOption {
+// DefaultDecodeLimits.
+func WithDecodeLimits(limits DecodeLimits) ParseOption {
 	return limitsParseOption{limits}
 }
 

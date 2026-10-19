@@ -50,7 +50,7 @@
 // STRING values in primitive form; indefinite lengths of constructed values
 // are accepted. WithTolerance also accepts other valid BER encodings and
 // values outside ASN.1 constraints, and records each violation in the
-// ber.ViolationLog when Parse succeeds.
+// ViolationLog when Parse succeeds.
 //
 // This package applies the dialogue rules of Q.774 Table 3 itself, in both
 // Parse modes and in Marshal. A Begin carries an AARQ (Figure A.5, sheet 3).
