@@ -110,8 +110,8 @@ func TestParseAcceptsGenericBER(t *testing.T) {
 	}
 }
 
-// Parameters retain their BER bytes. WithTolerance accepts representation
-// violations; strict Marshal enforces Q.773 (06/97) clause 4.1.1 inside them.
+// Parameters retain their BER bytes in both modes (ITU-T X.690 (02/2021)
+// clause 8.15); Q.773 clause 4.1.1 applies to TCAP's own syntax.
 func TestParseParameterVerbatim(t *testing.T) {
 	cases := []struct{ name, input, param string }{
 		{"inner length not minimal", "62184804010203046c10a10e02010102012d3006048103010203", "3006048103010203"},
@@ -126,12 +126,11 @@ func TestParseParameterVerbatim(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			profile := c.name == "outer length indefinite"
-			_, strict := tcap.Parse(hx(c.input))
-			var validation *ber.ValidationError
-			if profile && strict != nil || !profile && (!errors.As(strict, &validation) || len(reports.Snapshot()) == 0) {
-				t.Fatalf("strict Parse: %v; reports %v", strict, reports.Snapshot())
+			strict, err := tcap.Parse(hx(c.input))
+			if err != nil || len(reports.Snapshot()) != 0 {
+				t.Fatalf("strict Parse: %v; reports %v", err, reports.Snapshot())
 			}
+			assertSameMessage(t, msg, strict)
 			b, ok := msg.(*tcap.Begin)
 			if !ok || len(b.Components) != 1 || b.Components[0].Invoke == nil {
 				t.Fatalf("parsed %s", jsonText(normalize(msg)))
@@ -140,13 +139,14 @@ func TestParseParameterVerbatim(t *testing.T) {
 				t.Errorf("Parameter = %s, want %s", got, c.param)
 			}
 			out, err := msg.Marshal()
-			if profile {
-				if err != nil || hex.EncodeToString(out) != c.input {
-					t.Fatalf("Marshal = %x, %v", out, err)
-				}
-			} else if !errors.As(err, &validation) {
-				t.Fatalf("strict Marshal = %x, %v", out, err)
+			if err != nil || hex.EncodeToString(out) != c.input {
+				t.Fatalf("Marshal = %x, %v", out, err)
 			}
+			again, err := tcap.Parse(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertSameMessage(t, msg, again)
 		})
 	}
 }

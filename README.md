@@ -182,20 +182,19 @@ values of TCAP protocol elements.)
 Q.773 Annex A and X.880, the encoding rules of X.680 and X.690, and Q.773
 clauses 4.1.1, 4.2.2.2 and 4.2.3. This package checks the dialogue PDUs
 and results that each message type may carry (Q.774 Table 3), the dialogue
-versions (clause 3.2.3), and whether values fit its Go model. Transaction and
-dialogue fields use definite lengths, in the short form below 128 octets and
-otherwise in the fewest octets, and primitive strings (Q.773 clause 4.1.1). Parameters
-retain their supplied bytes and must pass the same checks on lengths and
-string forms.
+versions (clause 3.2.3), and whether values fit its Go model. TCAP's own
+fields use definite lengths, in the short form below 128 octets and otherwise
+in the fewest octets, and primitive strings (Q.773 clause 4.1.1). Parameters
+retain their supplied bytes and are checked only for well-formed BER.
 
 `Parse` applies the receiver rules. By default it accepts BER with the
-restrictions of Q.773 clause 4.1.1: lengths below 128 octets in the short
-form, long-form lengths in the fewest octets, and OCTET STRING and BIT STRING
-values in primitive form. Indefinite lengths of constructed values are
-accepted. `WithTolerance` also accepts other valid BER encodings and values
-outside ASN.1 constraints, and records each violation when parsing succeeds.
-This package applies the dialogue rules of ITU-T Q.774 (06/97) Table 3
-itself, in both `Parse` modes and in `Marshal`:
+restrictions of Q.773 clause 4.1.1 in TCAP's own syntax: lengths below 128
+octets in the short form, long-form lengths in the fewest octets, and OCTET
+STRING and BIT STRING values in primitive form. Indefinite lengths of
+constructed values are accepted. `WithTolerance` also accepts other valid BER
+encodings and values outside ASN.1 constraints, and records each violation
+when parsing succeeds. This package applies the dialogue rules of ITU-T Q.774
+(06/97) Table 3 itself, in both `Parse` modes and in `Marshal`:
 
 - a Begin carries an AARQ (Figure A.5, sheet 3);
 - a Continue or an End carries an AARE with result accepted (Figure A.5,
@@ -290,15 +289,17 @@ When it encodes a BIT STRING, it clears the unused bits of the last octet
 without changing the caller's value (clause 8.6.2.4); an invalid bit length
 is rejected.
 
-Parameters and the single-ASN1-type contents of an EXTERNAL keep the BER
-bytes they were given or received. `Parse` and `Marshal` check the lengths
-inside them, and the form of every universal OCTET STRING and BIT STRING,
-against Q.773 clause 4.1.1. They cannot check the form of a string under
-another tag, whose type only the TC-user knows, nor the octet-aligned and
-arbitrary encodings of an EXTERNAL. A message parsed with `WithTolerance`
-whose parameters or EXTERNAL contents break clause 4.1.1 does not marshal
-until the TC-user corrects them; the transaction and dialogue fields are
-encoded afresh and need no correction.
+TCAP's own syntax is the TC message, the component and dialogue syntax, and
+the encoding headers of an EXTERNAL. Parameters and the data values of user
+information and Opaque EXTERNALs are the TC-user's syntax (ITU-T X.690
+(02/2021) clauses 8.15 and 8.18), which Q.773 clause 4.1.1 does not cover.
+Parameters and single-ASN1-type contents keep the BER bytes they were given
+or received; `Parse` in either mode and `Marshal` check only that they are
+well-formed BER. Octet-aligned and arbitrary contents are not checked. The
+TC-user's encoding rules, such as 3GPP TS 29.002 clause 17.1.1 for MAP, are
+for its own codec to apply. A dialogue PDU is TCAP syntax in any of the three
+encodings. A message parsed with `WithTolerance` marshals with TCAP's own
+fields encoded afresh and the TC-user's bytes as received.
 
 `OID` is a string type, so application context names can be constants.
 `ParseOID` and `Marshal` validate OIDs with go-asn1, which accepts arcs of
@@ -377,13 +378,14 @@ limit. An empty ID accepted with `WithTolerance` is non-nil.
   `*ber.ValidationError` from the TCAP runtime. The old package type
   `ValidationError` is `FieldError`; `ParseError` carries the protocol
   context described above.
-- Strict `Parse` accepts the Q.773 clause 4.1.1 BER profile. `WithTolerance`
-  also accepts other valid BER encodings and values outside ASN.1
-  constraints, and records each violation when parsing succeeds. Both modes
-  enforce the dialogue rules of Q.774 Table 3, which this package applies.
+- Strict `Parse` accepts the Q.773 clause 4.1.1 BER profile in TCAP's own
+  syntax. `WithTolerance` also accepts other valid BER encodings and values
+  outside ASN.1 constraints, and records each violation when parsing
+  succeeds. Both modes enforce the dialogue rules of Q.774 Table 3, which
+  this package applies.
 - `Marshal` uses definite lengths for transaction and dialogue fields.
   Parameters and EXTERNAL single-ASN1-type contents retain their BER bytes
-  and must pass the Q.773 clause 4.1.1 checks.
+  and are checked only for well-formed BER.
 - `MinTransactionIDLength`, `MaxTransactionIDLength`, `MinInvokeID`,
   `MaxInvokeID`, `DefaultProtocolVersion` and `DefaultAcnPrefix` are gone.
 

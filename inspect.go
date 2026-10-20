@@ -41,7 +41,13 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	if transactionOnly {
 		return pe
 	}
-	validation := ber.ValidateBERElement(data, ber.TrackTCAPForm(opts)...)
+	// The scan stops where the codec does only with the codec's own scope
+	// for Q.773 clause 4.1.1, which leaves parameters as TC-user syntax
+	// (ITU-T X.690 (02/2021) clause 8.15). These are the source names of the
+	// generated TCMessage decoder; without them the profile also covers
+	// parameters and misses implicitly tagged strings
+	// (https://github.com/gomaja/go-asn1/issues/191).
+	validation := ber.ValidateBERElement(data, ber.TrackTCAPForm(opts, "TCMessage", "TCAPMessages", "TCMessage")...)
 	if errors.Is(validation, ber.ErrResourceLimit) {
 		// Only the codec's limit skips repeat counting. An inspection limit
 		// still permits counting immediate tags within the scan's budget.

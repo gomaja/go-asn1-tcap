@@ -38,19 +38,18 @@
 // Table 3), dialogue versions (clause 3.2.3), Table 7 transaction-ID
 // derivability and whether values fit its Go model.
 //
-// Marshal applies the sender rules. It encodes transaction and dialogue
-// fields with definite lengths, in the short
-// form below 128 octets and otherwise in the fewest octets, and strings in
-// primitive form (Q.773 clause 4.1.1). Marshal takes no options and encodes
-// strictly.
+// Marshal applies the sender rules. It encodes TCAP's own fields with
+// definite lengths, in the short form below 128 octets and otherwise in the
+// fewest octets, and strings in primitive form (Q.773 clause 4.1.1).
+// Marshal takes no options and encodes strictly.
 //
 // Parse applies the receiver rules. By default it accepts BER with the
-// restrictions of Q.773 clause 4.1.1: lengths below 128 octets in the short
-// form, long-form lengths in the fewest octets, and OCTET STRING and BIT
-// STRING values in primitive form; indefinite lengths of constructed values
-// are accepted. WithTolerance also accepts other valid BER encodings and
-// values outside ASN.1 constraints, and records each violation in the
-// ViolationLog when Parse succeeds.
+// restrictions of Q.773 clause 4.1.1 in TCAP's own syntax: lengths below 128
+// octets in the short form, long-form lengths in the fewest octets, and
+// OCTET STRING and BIT STRING values in primitive form; indefinite lengths of
+// constructed values are accepted. WithTolerance also accepts other valid
+// BER encodings and values outside ASN.1 constraints, and records each
+// violation in the ViolationLog when Parse succeeds.
 //
 // This package applies the dialogue rules of Q.774 Table 3 itself, in both
 // Parse modes and in Marshal. A Begin carries an AARQ (Figure A.5, sheet 3).
@@ -66,14 +65,18 @@
 // on transaction or dialogue state, such as whether a Continue or an End may
 // still carry its AARE, are left to the TCAP stack.
 //
-// Parameters and the single-ASN1-type contents of an EXTERNAL keep the BER
-// bytes they were given or received. Parse and Marshal check the lengths
-// inside them, and the form of every universal OCTET STRING and BIT STRING,
-// against Q.773 clause 4.1.1. They cannot check the form of a string under
-// another tag, whose type only the TC-user knows, nor the octet-aligned and
-// arbitrary encodings of an EXTERNAL. A message parsed with WithTolerance
-// whose parameters or EXTERNAL contents break clause 4.1.1 does not marshal
-// until the TC-user corrects them.
+// TCAP's own syntax is the TC message, the component and dialogue syntax,
+// and the encoding headers of an EXTERNAL. Parameters and the data values of
+// user information and Opaque EXTERNALs are the TC-user's syntax (ITU-T
+// X.690 (02/2021) clauses 8.15 and 8.18), which Q.773 clause 4.1.1 does not
+// cover. Parameters and single-ASN1-type contents keep the BER bytes they
+// were given or received; Parse in either mode and Marshal check only that
+// they are well-formed BER. Octet-aligned and arbitrary contents are not
+// checked. The TC-user's encoding rules, such as 3GPP TS 29.002 clause
+// 17.1.1 for MAP, are for its own codec to apply. A dialogue PDU is TCAP
+// syntax in any of the three encodings. A message parsed with WithTolerance
+// marshals with TCAP's own fields encoded afresh and the TC-user's bytes as
+// received.
 //
 // ASN.1 size and value constraints are reported as *ber.ValidationError from
 // github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber; use errors.As.

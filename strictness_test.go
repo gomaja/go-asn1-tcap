@@ -14,39 +14,62 @@ func TestParseProfileAndRawContents(t *testing.T) {
 	for _, tc := range []struct {
 		name, input string
 		portion     tcap.Portion
-		repaired    bool
+		canonical   string
 	}{
-		{"transaction nonminimal length", "620448810101", tcap.PortionTransaction, true},
-		{"transaction constructed OCTET STRING", "62056803040101", tcap.PortionTransaction, true},
-		{"component nonminimal length", "62114801016c0ca10a020101020101048101ff", tcap.PortionComponent, false},
-		{"component constructed OCTET STRING", "62124801016c0da10b02010102010124030401ff", tcap.PortionComponent, false},
-		{"user information nonminimal length", "62264801016b21281f060700118605010101a0146012a10306012abe0b280906012aa004048101ff", tcap.PortionDialogue, false},
-		{"user information constructed OCTET STRING", "62274801016b222820060700118605010101a0156013a10306012abe0c280a06012aa00524030401ff", tcap.PortionDialogue, false},
+		{"transaction nonminimal length", "620448810101", tcap.PortionTransaction, "6203480101"},
+		{"transaction constructed OCTET STRING", "62056803040101", tcap.PortionTransaction, "6203480101"},
+		{"component portion length", tlv("62", "480101", "6c8108a106020101020101"), tcap.PortionTransaction, "620d4801016c08a106020101020101"},
+		{"component header length", tlv("62", "480101", tlv("6c", "a18106020101020101")), tcap.PortionComponent, "620d4801016c08a106020101020101"},
+		{"EXTERNAL encoding header length", tlv("64", "490101", tlv("6b", tlv("28", "06012a", "a081020500"))), tcap.PortionDialogue, "640e4901016b09280706012aa0020500"},
+		{"component nonminimal length", "62114801016c0ca10a020101020101048101ff", tcap.PortionComponent, ""},
+		{"component constructed OCTET STRING", "62124801016c0da10b02010102010124030401ff", tcap.PortionComponent, ""},
+		{"user information nonminimal length", "62264801016b21281f060700118605010101a0146012a10306012abe0b280906012aa004048101ff", tcap.PortionDialogue, ""},
+		{"user information constructed OCTET STRING", "62274801016b222820060700118605010101a0156013a10306012abe0c280a06012aa00524030401ff", tcap.PortionDialogue, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			data := hx(tc.input)
-			_, err := tcap.Parse(data)
+			strict, err := tcap.Parse(data)
 			var pe *tcap.ParseError
 			var validation *ber.ValidationError
 			var decoded *wire.DecodeError
 			// Err holds the codec's DecodeError only for a transaction failure;
 			// a failing dialogue portion or component is reported alone.
-			if !errors.As(err, &pe) || pe.Portion != tc.portion || !errors.As(err, &validation) || errors.As(err, &decoded) != (tc.portion == tcap.PortionTransaction) {
+			if tc.canonical != "" {
+				if !errors.As(err, &pe) || pe.Portion != tc.portion || !errors.As(err, &validation) || errors.As(err, &decoded) != (tc.portion == tcap.PortionTransaction) {
+					t.Fatalf("strict Parse: %v", err)
+				}
+			} else if err != nil {
 				t.Fatalf("strict Parse: %v", err)
 			}
 			var reports ber.ViolationLog
 			m, err := tcap.Parse(data, tcap.WithTolerance(&reports))
-			if err != nil || len(reports.Snapshot()) != 1 {
+			wantReports := 0
+			if tc.canonical != "" {
+				wantReports = 1
+			}
+			if err != nil || len(reports.Snapshot()) != wantReports {
 				t.Fatalf("tolerant Parse: %v; reports %v", err, reports.Snapshot())
 			}
-			out, err := m.Marshal()
-			if tc.repaired {
-				if err != nil || !bytes.Equal(out, hx("6203480101")) {
-					t.Fatalf("rebuilt transaction: %x, %v", out, err)
+			if tc.canonical != "" {
+				if reports.Snapshot()[0].Kind != ber.ProtocolRule {
+					t.Fatalf("expected ProtocolRule: %v", reports.Snapshot())
 				}
-			} else if out != nil || !errors.As(err, &validation) {
-				t.Fatalf("strict raw-payload Marshal: %x, %v", out, err)
+			} else {
+				assertSameMessage(t, m, strict)
 			}
+			want := data
+			if tc.canonical != "" {
+				want = hx(tc.canonical)
+			}
+			out, err := m.Marshal()
+			if err != nil || !bytes.Equal(out, want) {
+				t.Fatalf("Marshal: %x, %v; want %x", out, err, want)
+			}
+			back, err := tcap.Parse(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertSameMessage(t, m, back)
 		})
 	}
 }

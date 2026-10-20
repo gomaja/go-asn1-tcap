@@ -371,7 +371,7 @@ func TestMarshalCodes(t *testing.T) {
 }
 
 // A parameter is one complete BER value (Q.773 clause 4.2.2.4), emitted
-// verbatim when it conforms to the clause 4.1.1 profile.
+// verbatim as TC-user syntax (ITU-T X.690 (02/2021) clause 8.15).
 func TestMarshalParameters(t *testing.T) {
 	inv := func(p []byte) *tcap.Begin {
 		return beginWith(tcap.Component{Invoke: &tcap.Invoke{InvokeID: 1, OpCode: tcap.LocalCode(45), Parameter: p}})
@@ -393,9 +393,9 @@ func TestMarshalParameters(t *testing.T) {
 		// X.690 (02/2021) clause 8.1.3.2: a primitive value has a definite length.
 		{name: "invoke indefinite primitive", msg: inv(hx("0480aa0000")), is: ber.ErrInvalidLength},
 		{name: "invoke indefinite missing end-of-contents", msg: inv(hx("30800403010203")), is: ber.ErrTruncated},
-		// Q.773 clause 4.1.1 applies inside the parameter.
-		{name: "invoke outer length not minimal", msg: inv(hx("3081050403010203")), constraint: true},
-		{name: "invoke inner length not minimal", msg: inv(hx("3006048103010203")), constraint: true},
+		// TC-user lengths are kept verbatim (X.690 clause 8.15).
+		{name: "invoke outer length not minimal", msg: inv(hx("3081050403010203")), want: "62184804010203046c10a10e02010102012d3081050403010203"},
+		{name: "invoke inner length not minimal", msg: inv(hx("3006048103010203")), want: "62184804010203046c10a10e02010102012d3006048103010203"},
 		{name: "invoke indefinite constructed", msg: inv(hx("308004030102030000")), want: "62194804010203046c11a10f02010102012d308004030102030000"},
 		{name: "second component", msg: beginWith(invokeC(1), tcap.Component{Invoke: &tcap.Invoke{InvokeID: 2, OpCode: tcap.LocalCode(60), Parameter: hx("0401aa0401bb")}}), is: ber.ErrExtraData},
 		{name: "return error nil", msg: re(nil), want: corpusHex(t, "end-error-local-no-parameter")},
@@ -580,7 +580,7 @@ func TestMarshalExternal(t *testing.T) {
 			IndirectReference: big.NewInt(7), Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("0500"),
 		}}}, constraint: true},
 		{name: "single-ASN1-type verbatim", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("3081020500")}),
-			constraint: true},
+			want: "64164904050607086b0e280c06032a0304a0053081020500"},
 		{name: "user information two elements", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("0102")}),
 			want: "62444804010203046b3c283a060700118605010101a02f602d80020780a109060704000001001403be1c280f060704000001010101a004a4028000280906032a030481020102"},
 		{name: "user information present empty", msg: &tcap.Begin{OTID: tidO, Dialogue: aarqD(pv1(), acn3, []tcap.External{}), Components: []tcap.Component{invokeC(1)}},

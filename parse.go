@@ -58,9 +58,10 @@ type parseConfig struct {
 // values outside their ASN.1 constraints, recording each violation in log
 // only if Parse succeeds. BER structure errors and the rules this package
 // applies itself, such as the dialogue rules of ITU-T Q.774 (06/97) Table 3,
-// apply in both modes. Marshal stays strict: parameters and EXTERNAL
-// single-ASN1-type contents that violate Q.773 clause 4.1.1 must be
-// corrected before encoding. log must not be nil.
+// apply in both modes. Marshal stays strict: it encodes TCAP's own fields
+// afresh, so a representation tolerated there needs no correction, and it
+// keeps parameters and EXTERNAL contents, the TC-user's syntax, as received.
+// log must not be nil.
 // If supplied more than once, the last WithTolerance wins.
 func WithTolerance(log *ViolationLog) ParseOption {
 	return toleranceParseOption{log}

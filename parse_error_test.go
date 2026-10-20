@@ -223,3 +223,30 @@ func TestParseErrorWrapping(t *testing.T) {
 		t.Errorf("FieldError %q: Unwrap = %v", fe.Error(), fe.Unwrap())
 	}
 }
+
+// An incomplete component portion leaves the transaction unestablished even
+// when an earlier argument uses a TC-user length form (Q.774 clause 3.3.4).
+func TestParseErrorTruncatedComponentPortion(t *testing.T) {
+	for _, input := range []string{
+		"62134801016c80a1090201010201016b8100a10202",
+		"62124801016c80a1080201010201016b00a10202",
+	} {
+		t.Run(input, func(t *testing.T) {
+			for _, tolerant := range []bool{false, true} {
+				var reports ber.ViolationLog
+				var opts []tcap.ParseOption
+				if tolerant {
+					opts = append(opts, tcap.WithTolerance(&reports))
+				}
+				m, err := tcap.Parse(hx(input), opts...)
+				var pe *tcap.ParseError
+				if m != nil || !errors.As(err, &pe) || !errors.Is(err, ber.ErrTruncated) || pe.Portion != tcap.PortionTransaction || pe.ComponentIndex != -1 || len(pe.Components) != 0 {
+					t.Errorf("tolerant %t: %v, %v", tolerant, m, err)
+				}
+				if len(reports.Snapshot()) != 0 {
+					t.Fatal("failed Parse published reports")
+				}
+			}
+		})
+	}
+}

@@ -10,9 +10,9 @@ import (
 // reported as *ber.ValidationError instead. BER structure errors retain the
 // codec's causes, including parameter and EXTERNAL single-ASN1-type errors.
 // The codec checks the ASN.1 of Q.773 Annex A and X.880, the encoding rules
-// of X.680 and X.690, and Q.773 clauses 4.1.1, 4.2.2.2 and 4.2.3. The
-// sentinels below report the rules this package applies itself: the Q.774
-// procedure rules and the limits of its Go model.
+// of X.680 and X.690, and Q.773 clauses 4.1.1 (in TCAP's own syntax),
+// 4.2.2.2 and 4.2.3. The sentinels below report the rules this package
+// applies itself: the Q.774 procedure rules and the limits of its Go model.
 var (
 	// ErrEmptyData reports that Parse received no octets.
 	ErrEmptyData = errors.New("tcap: empty data")

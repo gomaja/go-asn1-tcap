@@ -732,10 +732,6 @@ var (
 // specifies for every vector that Parse rejects.
 var corpusFailures = map[string]parseErrWant{
 	// Q.773 Table 20 defines only the [0] Linked ID tag.
-	"begin-nonminimal-long-length": {
-		portions: []tcap.Portion{tcap.PortionComponent}, msgTypes: []tcap.MessageType{tcap.MessageTypeBegin},
-		otid: "01020304", dtid: unchecked, compIndex: idx0, invokeID: "1", constraint: true,
-	},
 	"begin-linked-absent": {
 		portions: []tcap.Portion{tcap.PortionComponent}, msgTypes: []tcap.MessageType{tcap.MessageTypeBegin},
 		otid: "01020304", dtid: unchecked, compIndex: idx0, invokeID: "3", constraint: true,
