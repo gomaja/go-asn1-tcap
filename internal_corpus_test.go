@@ -49,7 +49,7 @@ func TestInternalCorpus(t *testing.T) {
 		t.Run(v.ID, func(t *testing.T) {
 			data := internalHex(t, v.Hex)
 			m, err := Parse(data)
-			valid := v.Valid && v.ID != "begin-linked-absent" && v.ID != "begin-nonminimal-long-length"
+			valid := v.Valid && v.ID != "begin-linked-absent"
 			if !valid {
 				var pe *ParseError
 				if !errors.As(err, &pe) || m != nil {
@@ -84,7 +84,7 @@ func internalNegative(t *testing.T, id string, pe *ParseError) {
 	var sentinel error
 	constraint := false
 	switch id {
-	case "begin-linked-absent", "begin-nonminimal-long-length":
+	case "begin-linked-absent":
 		portion, index, constraint = PortionComponent, 0, true
 	case "negative-empty-components":
 		portion, constraint = PortionComponent, true

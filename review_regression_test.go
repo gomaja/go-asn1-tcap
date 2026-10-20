@@ -277,46 +277,88 @@ func TestReviewF6ParameterBERStructure(t *testing.T) {
 		valid bool
 	}{
 		{"2100", false}, {"300102", false}, {"3003020101", true},
-		{"048101aa", false}, {"24800401aa0000", false},
+		{"048101aa", true}, {"24800401aa0000", true},
+		{"6bff", false}, {"4b800000", false}, {"6b04010200ff", false}, {"7f0b00", false},
 	} {
-		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "SingleASN1Type", "UserInformation", "OctetAligned"} {
+		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "SingleASN1Type", "UserInformation", "OctetAligned", "Arbitrary", "Opaque"} {
 			t.Run(tc.input+"/"+kind, func(t *testing.T) {
 				data := hx(tc.input)
 				m := &tcap.Begin{OTID: tcap.TransactionID{1}}
+				var message tcap.Message = m
+				var component, external string
 				switch kind {
 				case "Invoke":
 					m.Components = []tcap.Component{{Invoke: &tcap.Invoke{InvokeID: 1, OpCode: tcap.LocalCode(1), Parameter: data}}}
+					component = tlv("a1", "020101020101", tc.input)
 				case "ReturnError":
 					m.Components = []tcap.Component{{ReturnError: &tcap.ReturnError{InvokeID: 1, ErrorCode: tcap.LocalCode(1), Parameter: data}}}
+					component = tlv("a3", "020101020101", tc.input)
 				case "Result":
 					m.Components = []tcap.Component{{ReturnResultLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(1), Parameter: data}}}}
+					component = tlv("a2", "020101", tlv("30", "020101", tc.input))
 				case "ResultNotLast":
 					m.Components = []tcap.Component{{ReturnResultNotLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(1), Parameter: data}}}}
-				case "SingleASN1Type":
+					component = tlv("a7", "020101", tlv("30", "020101", tc.input))
+				case "SingleASN1Type", "UserInformation":
 					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: data}}}}
+					external = tlv("28", "06012a", tlv("a0", tc.input))
 				case "OctetAligned":
 					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalOctetAligned, OctetAligned: data}}}}
-				case "UserInformation":
-					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: data}}}}
+					external = tlv("28", "06012a", tlv("81", tc.input))
+				case "Arbitrary":
+					m.Dialogue = &tcap.Dialogue{Request: &tcap.AARQ{ApplicationContextName: "1.2", UserInformation: []tcap.External{{DirectReference: "1.2", Encoding: runtime.ExternalArbitrary, Arbitrary: runtime.BitString{Bytes: data, BitLength: len(data) * 8}}}}}
+					external = tlv("28", "06012a", tlv("82", "00", tc.input))
+				case "Opaque":
+					message = &tcap.End{DTID: tcap.TransactionID{1}, Dialogue: &tcap.Dialogue{Opaque: &tcap.External{DirectReference: "1.2", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: data}}}
+					external = tlv("28", "06012a", tlv("a0", tc.input))
 				}
-				out, err := m.Marshal()
-				valid := tc.valid || kind == "OctetAligned"
+				input := tlv("62", "480101", tlv("6c", component))
+				if external != "" {
+					input = tlv("62", "480101", dialoguePortion(hexDialogueAS, tlv("60", tlv("a1", "06012a"), tlv("be", external))))
+				}
+				if kind == "Opaque" {
+					input = tlv("64", "490101", tlv("6b", external))
+				}
+				out, err := message.Marshal()
+				valid := tc.valid || kind == "OctetAligned" || kind == "Arbitrary"
 				if valid {
-					if err != nil {
-						t.Fatal(err)
+					if err != nil || !bytes.Equal(out, hx(input)) {
+						t.Fatalf("Marshal = %x, %v; want %s", out, err, input)
 					}
 					back, err := tcap.Parse(out)
-					if err != nil || !reflect.DeepEqual(m, back) {
+					if err != nil || !reflect.DeepEqual(message, back) {
 						t.Fatalf("round trip = %v, %v", back, err)
 					}
-				} else if expected := ber.ValidateBEREncodedElement(data); expected != nil {
-					if err == nil || !sameElementFailure(err, expected) {
+				} else {
+					expected := ber.ValidateBEREncodedElement(data)
+					if expected == nil || err == nil || !sameElementFailure(err, expected) {
 						t.Fatalf("Marshal = %x, %v; want codec BER element failure", out, err)
 					}
-				} else {
-					var validation *ber.ValidationError
-					if !errors.As(err, &validation) {
-						t.Fatalf("profile error = %v", err)
+				}
+				for _, tolerant := range []bool{false, true} {
+					var reports ber.ViolationLog
+					var opts []tcap.ParseOption
+					if tolerant {
+						opts = append(opts, tcap.WithTolerance(&reports))
+					}
+					back, err := tcap.Parse(hx(input), opts...)
+					if valid {
+						if err != nil || !reflect.DeepEqual(message, back) {
+							t.Fatalf("tolerant %t: %v, %v", tolerant, back, err)
+						}
+						if encoded, err := back.Marshal(); err != nil || !bytes.Equal(encoded, hx(input)) {
+							t.Fatalf("tolerant %t Marshal = %x, %v", tolerant, encoded, err)
+						}
+					} else {
+						var element *ber.ElementError
+						var validation *ber.ValidationError
+						var pe *tcap.ParseError
+						if back != nil || !errors.As(err, &pe) || !errors.As(err, &element) || errors.As(err, &validation) {
+							t.Fatalf("tolerant %t: %v, %v; want structural decode failure", tolerant, back, err)
+						}
+					}
+					if len(reports.Snapshot()) != 0 {
+						t.Fatalf("tolerant %t: reports %v", tolerant, reports.Snapshot())
 					}
 				}
 			})

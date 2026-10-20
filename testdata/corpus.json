@@ -1101,7 +1101,7 @@
       "otid": "01020304"
     },
     "wiresharkAgrees": true,
-    "notes": "BER allows non-minimal length forms; DER requires minimal length forms."
+    "notes": "TC-user parameter lengths are kept verbatim (ITU-T X.690 (02/2021) clause 8.15); Q.773 clause 4.1.1 applies to TCAP's own syntax."
   },
   {
     "id": "begin-aarq-no-components",

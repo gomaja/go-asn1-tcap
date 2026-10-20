@@ -156,24 +156,33 @@ func TestProcedureCodecLimitKeepsRepeatedPrefix(t *testing.T) {
 
 // Only a codec limit skips the Table 7 repeat scan. A limit reached later
 // during failure inspection still counts the immediate tags within budget.
+// The repeated ID is a constructed OCTET STRING, which the inspection
+// refuses where the codec does (Q.773 clause 4.1.1), so a limit is reported
+// only where the inspection reaches it first.
 func TestProcedureInspectionLimitCountsRepeatedPrefix(t *testing.T) {
+	const begin, cont = "620e4801016803040102300430020500", "65114801014901026903040103300430020500"
 	for _, tc := range []struct {
 		input, otid, dtid string
-		maxWork           int
+		limits            ber.DecodeLimits
+		limit             bool
 	}{
-		{"620e4801016803040102300430020500", "", "", 10},
-		{"65114801014901026903040103300430020500", "01", "", 13},
+		{begin, "", "", ber.DecodeLimits{MaxDepth: 2}, false},
+		{begin, "", "", ber.DecodeLimits{MaxElements: 4}, false},
+		{begin, "", "", ber.DecodeLimits{MaxElements: 5}, false},
+		{begin, "", "", ber.DecodeLimits{MaxWork: 10}, true},
+		{cont, "01", "", ber.DecodeLimits{MaxDepth: 2}, false},
+		{cont, "01", "", ber.DecodeLimits{MaxElements: 4}, true},
+		{cont, "01", "", ber.DecodeLimits{MaxElements: 5}, false},
+		{cont, "01", "", ber.DecodeLimits{MaxWork: 13}, true},
 	} {
-		for _, limits := range []ber.DecodeLimits{{MaxDepth: 2}, {MaxElements: 4}, {MaxElements: 5}, {MaxWork: tc.maxWork}} {
-			var w wire.TCMessage
-			codecErr := w.UnmarshalBER(hx(tc.input), ber.WithDecodeLimits(limits))
-			if codecErr == nil || errors.Is(codecErr, ber.ErrResourceLimit) {
-				t.Fatalf("expected non-limit codec failure: %v", codecErr)
-			}
-			pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(limits))
-			if !errors.Is(pe, ber.ErrResourceLimit) || pe.Portion != tcap.PortionTransaction || pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid {
-				t.Fatalf("%s, limits %+v: %v, IDs %s/%s, want %s/%s", tc.input, limits, pe, pe.OTID, pe.DTID, tc.otid, tc.dtid)
-			}
+		var w wire.TCMessage
+		codecErr := w.UnmarshalBER(hx(tc.input), ber.WithDecodeLimits(tc.limits))
+		if codecErr == nil || errors.Is(codecErr, ber.ErrResourceLimit) {
+			t.Fatalf("expected non-limit codec failure: %v", codecErr)
+		}
+		pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(tc.limits))
+		if errors.Is(pe, ber.ErrResourceLimit) != tc.limit || pe.Portion != tcap.PortionTransaction || pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid {
+			t.Fatalf("%s, limits %+v: %v, IDs %s/%s, want %s/%s, limit %t", tc.input, tc.limits, pe, pe.OTID, pe.DTID, tc.otid, tc.dtid, tc.limit)
 		}
 	}
 	// The duplicate DTID child ends beyond MaxWork 10, so it is not counted.

@@ -93,7 +93,10 @@ type AUDT struct {
 //
 // Encoding selects which of SingleASN1Type, OctetAligned and Arbitrary holds
 // the data value; the other two are empty. SingleASN1Type is the complete BER
-// encoding of one value, including its tag and length.
+// encoding of one value, including its tag and length. The data value is in
+// the TC-user's syntax: SingleASN1Type keeps the bytes it was given or
+// received and is checked only for well-formed BER, and OctetAligned and
+// Arbitrary are not checked. Q.773 clause 4.1.1 covers the encoding headers.
 type External struct {
 	DirectReference     OID
 	IndirectReference   *big.Int

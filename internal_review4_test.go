@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
+	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 )
 
 func TestInternalReview4DialogueFailureLocation(t *testing.T) {
@@ -26,6 +27,17 @@ func TestInternalReview4DialogueFailureLocation(t *testing.T) {
 		}
 		var message wire.TCMessage
 		err = message.UnmarshalBER(data)
+		if tc.input == "62104801016c0ba1090201010201016b8100" {
+			if err != nil {
+				t.Fatalf("TC-user parameter: %v", err)
+			}
+			// No parameter form rule is checked by the codec. Supply a deeper
+			// location to exercise the direct-child guard independently.
+			offset := 15
+			err = &wire.DecodeError{Path: "TCAPMessages.TCMessage.begin.components[0].invoke.parameter", Cause: &ber.ValidationError{Violation: ber.Violation{
+				Kind: ber.ProtocolRule, Offset: &offset, ChildIndexes: []int{1, 0, 2},
+			}}}
+		}
 		var failure *wire.DecodeError
 		if !errors.As(err, &failure) {
 			t.Fatalf("codec error: %v", err)
