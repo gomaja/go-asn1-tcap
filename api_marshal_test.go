@@ -596,6 +596,9 @@ func TestMarshalExternal(t *testing.T) {
 		{name: "single nil", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type}), is: ber.ErrTruncated},
 		{name: "single two values", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("05000500")}), is: ber.ErrExtraData},
 		{name: "single truncated", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("0403aabb")}), is: ber.ErrTruncated},
+		// X.690 (02/2021) clause 8.9.2: the inner element announces 48 octets.
+		{name: "single nested element truncated", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("300430303030")}), is: ber.ErrTruncated},
+		{name: "user information nested element truncated", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("300430303030")}), is: ber.ErrTruncated},
 		{name: "direct reference invalid", msg: opaque(tcap.External{DirectReference: "1.2.x", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: tcap.ErrInvalidOID},
 		{name: "user information direct reference invalid", msg: userInfo(tcap.External{DirectReference: "7.1", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: tcap.ErrInvalidOID},
 		// X.690 (02/2021) clause 8.18.4 Table 2: an EXTERNAL needs a direct
