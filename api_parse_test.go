@@ -439,6 +439,39 @@ func TestParseUserInformation(t *testing.T) {
 	}
 }
 
+// TestParseSingleASN1TypeNestedElement: a single-ASN1-type value is checked
+// as well-formed BER throughout, not only as one outer element. A universal
+// SEQUENCE holds complete encodings (ITU-T X.690 (02/2021) clause 8.9.2), so
+// 30 04 30 30 30 30, whose inner element announces 48 octets, is refused in
+// both modes, in user information and in an Opaque dialogue portion. With
+// 30 04 30 02 05 00 the same messages parse and encode unchanged.
+func TestParseSingleASN1TypeNestedElement(t *testing.T) {
+	inputs := func(value string) []struct{ name, input string } {
+		return []struct{ name, input string }{
+			{"user information", tlv("62", hexOTID, dialoguePortion(hexDialogueAS, tlv("60", hexPV1, hexACN3, tlv("be", tlv("28", "060704000001010101", tlv("a0", value))))), tlv("6c", hexInvoke))},
+			{"Opaque", tlv("64", hexDTID, tlv("6b", tlv("28", "06032a0304", tlv("a0", value))))},
+		}
+	}
+	for _, c := range inputs("300430020500") {
+		if out := hex.EncodeToString(mustMarshal(t, mustParse(t, c.input))); out != c.input {
+			t.Fatalf("%s: Marshal:\n got %s\nwant %s", c.name, out, c.input)
+		}
+	}
+	for _, c := range inputs("300430303030") {
+		for _, tolerant := range []bool{false, true} {
+			var opts []tcap.ParseOption
+			if tolerant {
+				opts = append(opts, tcap.WithTolerance(&ber.ViolationLog{}))
+			}
+			m, err := tcap.Parse(hx(c.input), opts...)
+			var pe *tcap.ParseError
+			if m != nil || !errors.Is(err, ber.ErrTruncated) || !errors.As(err, &pe) || pe.Portion != tcap.PortionDialogue {
+				t.Fatalf("%s, tolerant %t: %v, %v", c.name, tolerant, m, err)
+			}
+		}
+	}
+}
+
 // TestParseReceiverComponentRules covers the component rules of contract 4.2.
 func TestParseReceiverComponentRules(t *testing.T) {
 	cases := []struct {
