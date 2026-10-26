@@ -126,8 +126,22 @@
 // caller's value (X.690 (02/2021) clause 8.6.2.4).
 //
 // The values of TCAP protocol elements (P-Abort causes, problem codes,
-// associate results and diagnostics, abort sources) are the generated types
-// of github.com/gomaja/go-asn1/telecom/ss7/tcap. Application context names,
-// operation codes and error codes of MAP and CAP are in the subpackages
-// gsmmap and camel.
+// associate results and diagnostics, abort sources) are go-asn1's generated
+// types, which this package names with their named numbers so that a caller
+// needs no import of go-asn1. Each holds an INTEGER of any width and cannot
+// be compared with ==: build one with its New function, and compare one with
+// AsInt64 against the constants. BitString and ExternalEncoding are named
+// here for the same reason.
+//
+//	cause := tcap.NewPAbortCause(tcap.PAbortCauseUnrecognizedTransactionID)
+//	abort := &tcap.Abort{DTID: dtid, PAbortCause: &cause}
+//
+//	if c := received.PAbortCause; c != nil {
+//		if v, ok := c.AsInt64(); ok && v == tcap.PAbortCauseIncorrectTransactionPortion {
+//			// ...
+//		}
+//	}
+//
+// Application context names, operation codes and error codes of MAP and CAP
+// are in the subpackages gsmmap and camel.
 package tcap

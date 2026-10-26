@@ -93,7 +93,7 @@ func (*End) isMessage() {}
 // dialogue service provider aborts. At most one of them is set.
 type Abort struct {
 	DTID        TransactionID
-	PAbortCause *wire.PAbortCause
+	PAbortCause *PAbortCause
 	Dialogue    *Dialogue
 }
 
@@ -103,6 +103,26 @@ func (m *Abort) Marshal() ([]byte, error) {
 }
 
 func (*Abort) isMessage() {}
+
+// PAbortCause is the P-Abort cause of an Abort sent by the transaction
+// sub-layer (ITU-T Q.773 (06/97) Annex A, TCAPMessages, P-AbortCause). Build
+// one with NewPAbortCause and compare one with AsInt64 against these
+// constants.
+type PAbortCause = wire.PAbortCause
+
+// The named numbers of PAbortCause.
+const (
+	PAbortCauseUnrecognizedMessageType          = wire.PAbortCauseUnrecognizedMessageType
+	PAbortCauseUnrecognizedTransactionID        = wire.PAbortCauseUnrecognizedTransactionID
+	PAbortCauseBadlyFormattedTransactionPortion = wire.PAbortCauseBadlyFormattedTransactionPortion
+	PAbortCauseIncorrectTransactionPortion      = wire.PAbortCauseIncorrectTransactionPortion
+	PAbortCauseResourceLimitation               = wire.PAbortCauseResourceLimitation
+)
+
+// NewPAbortCause returns the PAbortCause with the given value.
+func NewPAbortCause(value int64) PAbortCause {
+	return wire.NewPAbortCauseInt64(value)
+}
 
 // Unidirectional carries components outside a transaction (Q.773 Table 3).
 // Its component portion is mandatory: Components holds at least one

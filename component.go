@@ -64,10 +64,87 @@ type Reject struct {
 // Problem is the problem code of a Reject (Q.773 clause 4.2.2.6). Exactly one
 // field is set.
 type Problem struct {
-	General      *wire.GeneralProblem
-	Invoke       *wire.InvokeProblem
-	ReturnResult *wire.ReturnResultProblem
-	ReturnError  *wire.ReturnErrorProblem
+	General      *GeneralProblem
+	Invoke       *InvokeProblem
+	ReturnResult *ReturnResultProblem
+	ReturnError  *ReturnErrorProblem
+}
+
+// GeneralProblem is the problem code of a Reject for a general problem
+// (ITU-T X.880 (07/94), Remote-Operations-Generic-ROS-PDUs). Build one with
+// NewGeneralProblem and compare one with AsInt64 against these constants.
+type GeneralProblem = wire.GeneralProblem
+
+// The named numbers of GeneralProblem.
+const (
+	GeneralProblemUnrecognizedPDU    = wire.GeneralProblemUnrecognizedPDU
+	GeneralProblemMistypedPDU        = wire.GeneralProblemMistypedPDU
+	GeneralProblemBadlyStructuredPDU = wire.GeneralProblemBadlyStructuredPDU
+)
+
+// NewGeneralProblem returns the GeneralProblem with the given value.
+func NewGeneralProblem(value int64) GeneralProblem {
+	return wire.NewGeneralProblemInt64(value)
+}
+
+// InvokeProblem is the problem code of a Reject for an Invoke (X.880
+// Remote-Operations-Generic-ROS-PDUs). Build one with NewInvokeProblem and
+// compare one with AsInt64 against these constants.
+type InvokeProblem = wire.InvokeProblem
+
+// The named numbers of InvokeProblem.
+const (
+	InvokeProblemDuplicateInvocation       = wire.InvokeProblemDuplicateInvocation
+	InvokeProblemUnrecognizedOperation     = wire.InvokeProblemUnrecognizedOperation
+	InvokeProblemMistypedArgument          = wire.InvokeProblemMistypedArgument
+	InvokeProblemResourceLimitation        = wire.InvokeProblemResourceLimitation
+	InvokeProblemReleaseInProgress         = wire.InvokeProblemReleaseInProgress
+	InvokeProblemUnrecognizedLinkedId      = wire.InvokeProblemUnrecognizedLinkedId
+	InvokeProblemLinkedResponseUnexpected  = wire.InvokeProblemLinkedResponseUnexpected
+	InvokeProblemUnexpectedLinkedOperation = wire.InvokeProblemUnexpectedLinkedOperation
+)
+
+// NewInvokeProblem returns the InvokeProblem with the given value.
+func NewInvokeProblem(value int64) InvokeProblem {
+	return wire.NewInvokeProblemInt64(value)
+}
+
+// ReturnResultProblem is the problem code of a Reject for a Return Result
+// (X.880 Remote-Operations-Generic-ROS-PDUs). Build one with
+// NewReturnResultProblem and compare one with AsInt64 against these
+// constants.
+type ReturnResultProblem = wire.ReturnResultProblem
+
+// The named numbers of ReturnResultProblem.
+const (
+	ReturnResultProblemUnrecognizedInvocation   = wire.ReturnResultProblemUnrecognizedInvocation
+	ReturnResultProblemResultResponseUnexpected = wire.ReturnResultProblemResultResponseUnexpected
+	ReturnResultProblemMistypedResult           = wire.ReturnResultProblemMistypedResult
+)
+
+// NewReturnResultProblem returns the ReturnResultProblem with the given value.
+func NewReturnResultProblem(value int64) ReturnResultProblem {
+	return wire.NewReturnResultProblemInt64(value)
+}
+
+// ReturnErrorProblem is the problem code of a Reject for a Return Error
+// (X.880 Remote-Operations-Generic-ROS-PDUs). Build one with
+// NewReturnErrorProblem and compare one with AsInt64 against these
+// constants.
+type ReturnErrorProblem = wire.ReturnErrorProblem
+
+// The named numbers of ReturnErrorProblem.
+const (
+	ReturnErrorProblemUnrecognizedInvocation  = wire.ReturnErrorProblemUnrecognizedInvocation
+	ReturnErrorProblemErrorResponseUnexpected = wire.ReturnErrorProblemErrorResponseUnexpected
+	ReturnErrorProblemUnrecognizedError       = wire.ReturnErrorProblemUnrecognizedError
+	ReturnErrorProblemUnexpectedError         = wire.ReturnErrorProblemUnexpectedError
+	ReturnErrorProblemMistypedParameter       = wire.ReturnErrorProblemMistypedParameter
+)
+
+// NewReturnErrorProblem returns the ReturnErrorProblem with the given value.
+func NewReturnErrorProblem(value int64) ReturnErrorProblem {
+	return wire.NewReturnErrorProblemInt64(value)
 }
 
 // Code is an operation code or an error code: a LocalCode or a GlobalCode
