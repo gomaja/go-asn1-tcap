@@ -158,7 +158,7 @@ the values that ITU-T Q.774 (06/97) clause 3.2 prescribes:
 ```go
 // Refuse a dialogue whose application context is not supported, and offer
 // version 2 instead (the initiator falls back, 3GPP TS 29.002 V19.1.0 clause 5.2.1).
-notSupported := wire.AssociateSourceDiagnosticDialogueServiceUserValueApplicationContextNameNotSupportedValue()
+notSupported := tcap.NewDialogueServiceUserDiagnostic(tcap.DialogueServiceUserApplicationContextNameNotSupported)
 refusal := &tcap.Abort{
     DTID: begin.OTID,
     Dialogue: tcap.NewRejectDialogue(gsmmap.ShortMsgGatewayContextV2,
@@ -170,11 +170,25 @@ userAbort := &tcap.Abort{DTID: peerTID, Dialogue: tcap.NewUserAbortDialogue(user
 providerAbort := &tcap.Abort{DTID: peerTID, Dialogue: tcap.NewProviderAbortDialogue()}
 
 // Abort by the transaction sub-layer.
-pAbort := &tcap.Abort{DTID: peerTID, PAbortCause: new(wire.PAbortCauseUnrecognizedTransactionIDValue())}
+cause := tcap.NewPAbortCause(tcap.PAbortCauseUnrecognizedTransactionID)
+pAbort := &tcap.Abort{DTID: peerTID, PAbortCause: &cause}
 ```
 
-(`wire` is `github.com/gomaja/go-asn1/telecom/ss7/tcap`, which defines the
-values of TCAP protocol elements.)
+P-Abort causes, problem codes, dialogue results and diagnostics, and abort
+sources hold INTEGERs of any width, so they cannot be compared with `==`.
+Compare a received one with `AsInt64` against the constants:
+
+```go
+// The responder does not support the proposed application context; the
+// AARE names the one it offers instead (Q.774 clause 3.2.1).
+if d := received.Dialogue; d != nil && d.Response != nil {
+    if u := d.Response.ResultSourceDiagnostic.DialogueServiceUser; u != nil {
+        if v, ok := u.AsInt64(); ok && v == tcap.DialogueServiceUserApplicationContextNameNotSupported {
+            retry(d.Response.ApplicationContextName)
+        }
+    }
+}
+```
 
 ### Errors and abnormal procedures
 
@@ -211,6 +225,11 @@ Unidirectional and keeps its abstract syntax out of the other messages
 carrying another abstract syntax and records the violation, and `Marshal`
 refuses it. Rules that depend on transaction or dialogue state, such as
 whether a Continue or an End may still carry its AARE, are left to the stack.
+
+The codec's errors are go-asn1's types and sentinels. To match them with
+`errors.As` or `errors.Is`, import
+`github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber` (`ber` below) or
+`github.com/gomaja/go-asn1/telecom/ss7/tcap` (`wire`).
 
 - ASN.1 size and value constraints, such as a transaction ID of 5 octets or an
   invoke ID of 200, are `*ber.ValidationError` (`errors.As`).
@@ -365,10 +384,10 @@ limit. An empty ID accepted with `WithTolerance` is non-nil.
   `*ABRT`; `Unidirectional` (`*AUDT`) and `Opaque` are new. `DialogAsId` is
   gone: the abstract syntax follows from the PDU.
 - Application context names are `OID` strings such as `"0.4.0.0.1.0.20.3"`,
-  not `[]uint64`. `ProtocolVersion` is a `*runtime.BitString` from
-  `github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime`. Nil means the default
-  `{version1}` and omits the field. `ProtocolVersion1()` returns an explicit
-  value, which `Marshal` encodes in an AARQ, AARE or AUDT.
+  not `[]uint64`. `ProtocolVersion` is a `*BitString`, go-asn1's BIT STRING
+  named in this package. Nil means the default `{version1}` and omits the
+  field. `ProtocolVersion1()` returns an explicit value, which `Marshal`
+  encodes in an AARQ, AARE or AUDT.
 - User information is `[]External`, not concatenated bytes.
 - `NewDialogueResponseFromDialogueRequest` is `NewAcceptDialogue`.
 

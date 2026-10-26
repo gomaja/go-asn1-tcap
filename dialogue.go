@@ -48,7 +48,7 @@ type Dialogue struct {
 // A nil UserInformation omits the field; a non-nil empty slice encodes an
 // empty sequence.
 type AARQ struct {
-	ProtocolVersion        *runtime.BitString
+	ProtocolVersion        *BitString
 	ApplicationContextName OID
 	UserInformation        []External
 }
@@ -58,9 +58,9 @@ type AARQ struct {
 // means the DEFAULT {version1}; a non-nil value is encoded (ITU-T X.690
 // (02/2021) clause 8.9.3).
 type AARE struct {
-	ProtocolVersion        *runtime.BitString
+	ProtocolVersion        *BitString
 	ApplicationContextName OID
-	Result                 wire.AssociateResult
+	Result                 AssociateResult
 	ResultSourceDiagnostic ResultSourceDiagnostic
 	UserInformation        []External
 }
@@ -68,22 +68,92 @@ type AARE struct {
 // ResultSourceDiagnostic is the result-source-diagnostic of an AARE. Exactly
 // one field is set.
 type ResultSourceDiagnostic struct {
-	DialogueServiceUser     *wire.AssociateSourceDiagnosticDialogueServiceUserValue
-	DialogueServiceProvider *wire.AssociateSourceDiagnosticDialogueServiceProviderValue
+	DialogueServiceUser     *DialogueServiceUserDiagnostic
+	DialogueServiceProvider *DialogueServiceProviderDiagnostic
+}
+
+// AssociateResult is the result of an AARE (Q.773 Annex A, DialoguePDUs,
+// Associate-result). Build one with NewAssociateResult and compare one with
+// AsInt64 against these constants.
+type AssociateResult = wire.AssociateResult
+
+// The named numbers of AssociateResult.
+const (
+	AssociateResultAccepted        = wire.AssociateResultAccepted
+	AssociateResultRejectPermanent = wire.AssociateResultRejectPermanent
+)
+
+// NewAssociateResult returns the AssociateResult with the given value.
+func NewAssociateResult(value int64) AssociateResult {
+	return wire.NewAssociateResultInt64(value)
+}
+
+// DialogueServiceUserDiagnostic is the dialogue-service-user alternative of
+// an AARE's Associate-source-diagnostic (Q.773 Annex A, DialoguePDUs). Build
+// one with NewDialogueServiceUserDiagnostic and compare one with AsInt64
+// against these constants.
+type DialogueServiceUserDiagnostic = wire.AssociateSourceDiagnosticDialogueServiceUserValue
+
+// The named numbers of DialogueServiceUserDiagnostic.
+const (
+	DialogueServiceUserNull                               = wire.AssociateSourceDiagnosticDialogueServiceUserValueNull
+	DialogueServiceUserNoReasonGiven                      = wire.AssociateSourceDiagnosticDialogueServiceUserValueNoReasonGiven
+	DialogueServiceUserApplicationContextNameNotSupported = wire.AssociateSourceDiagnosticDialogueServiceUserValueApplicationContextNameNotSupported
+)
+
+// NewDialogueServiceUserDiagnostic returns the DialogueServiceUserDiagnostic
+// with the given value.
+func NewDialogueServiceUserDiagnostic(value int64) DialogueServiceUserDiagnostic {
+	return wire.NewAssociateSourceDiagnosticDialogueServiceUserValueInt64(value)
+}
+
+// DialogueServiceProviderDiagnostic is the dialogue-service-provider
+// alternative of an AARE's Associate-source-diagnostic (Q.773 Annex A,
+// DialoguePDUs). Build one with NewDialogueServiceProviderDiagnostic and
+// compare one with AsInt64 against these constants.
+type DialogueServiceProviderDiagnostic = wire.AssociateSourceDiagnosticDialogueServiceProviderValue
+
+// The named numbers of DialogueServiceProviderDiagnostic.
+const (
+	DialogueServiceProviderNull                    = wire.AssociateSourceDiagnosticDialogueServiceProviderValueNull
+	DialogueServiceProviderNoReasonGiven           = wire.AssociateSourceDiagnosticDialogueServiceProviderValueNoReasonGiven
+	DialogueServiceProviderNoCommonDialoguePortion = wire.AssociateSourceDiagnosticDialogueServiceProviderValueNoCommonDialoguePortion
+)
+
+// NewDialogueServiceProviderDiagnostic returns the
+// DialogueServiceProviderDiagnostic with the given value.
+func NewDialogueServiceProviderDiagnostic(value int64) DialogueServiceProviderDiagnostic {
+	return wire.NewAssociateSourceDiagnosticDialogueServiceProviderValueInt64(value)
 }
 
 // ABRT is the dialogue abort APDU (Q.773 clause 3.2.1, ABRT-apdu). The zero
 // value of AbortSource is dialogue-service-user.
 type ABRT struct {
-	AbortSource     wire.ABRTSource
+	AbortSource     ABRTSource
 	UserInformation []External
+}
+
+// ABRTSource is the abort-source of an ABRT (Q.773 Annex A, DialoguePDUs,
+// ABRT-source). Build one with NewABRTSource and compare one with AsInt64
+// against these constants.
+type ABRTSource = wire.ABRTSource
+
+// The named numbers of ABRTSource.
+const (
+	ABRTSourceDialogueServiceUser     = wire.ABRTSourceDialogueServiceUser
+	ABRTSourceDialogueServiceProvider = wire.ABRTSourceDialogueServiceProvider
+)
+
+// NewABRTSource returns the ABRTSource with the given value.
+func NewABRTSource(value int64) ABRTSource {
+	return wire.NewABRTSourceInt64(value)
 }
 
 // AUDT is the unidirectional dialogue APDU (Q.773 clause 3.2.2, AUDT-apdu).
 // A nil ProtocolVersion is omitted and means the DEFAULT {version1}; a
 // non-nil value is encoded (ITU-T X.690 (02/2021) clause 8.9.3).
 type AUDT struct {
-	ProtocolVersion        *runtime.BitString
+	ProtocolVersion        *BitString
 	ApplicationContextName OID
 	UserInformation        []External
 }
@@ -102,18 +172,36 @@ type External struct {
 	IndirectReference   *big.Int
 	DataValueDescriptor *string
 
-	Encoding       runtime.ExternalEncoding
+	Encoding       ExternalEncoding
 	SingleASN1Type []byte
 	OctetAligned   []byte
-	Arbitrary      runtime.BitString
+	Arbitrary      BitString
 }
+
+// ExternalEncoding tells which encoding of an EXTERNAL holds the data value
+// (X.690 (02/2021) clause 8.18). The zero value is none of them, so an
+// External must set one.
+type ExternalEncoding = runtime.ExternalEncoding
+
+// The encodings of an EXTERNAL.
+const (
+	ExternalSingleASN1Type ExternalEncoding = runtime.ExternalSingleASN1Type
+	ExternalOctetAligned   ExternalEncoding = runtime.ExternalOctetAligned
+	ExternalArbitrary      ExternalEncoding = runtime.ExternalArbitrary
+)
+
+// BitString is a BIT STRING value: the protocol-version of an AARQ, AARE or
+// AUDT, or the data value of an External in the arbitrary encoding. Bytes
+// holds the bits from the most significant bit of the first octet, and
+// BitLength is the number of bits.
+type BitString = runtime.BitString
 
 // ProtocolVersion1 returns a new BitString containing {version1}, the only
 // version defined by ITU-T Q.773 (06/97) clause 3.2. Marshal encodes it as
 // 80 02 07 80 in AARQ, AARE and AUDT. A nil ProtocolVersion omits the field
 // and means the same version.
-func ProtocolVersion1() *runtime.BitString {
-	return &runtime.BitString{Bytes: []byte{0x80}, BitLength: 1}
+func ProtocolVersion1() *BitString {
+	return &BitString{Bytes: []byte{0x80}, BitLength: 1}
 }
 
 // OffersVersion1 reports whether the protocol-version of an AARQ or an AUDT
@@ -122,6 +210,6 @@ func ProtocolVersion1() *runtime.BitString {
 // the result. An empty BitString does not offer version1. A dialogue request
 // that does not offer version1 is answered as described in ITU-T Q.774 (06/97)
 // clause 3.2.3. OffersVersion1 does not validate the BitString.
-func OffersVersion1(protocolVersion *runtime.BitString) bool {
+func OffersVersion1(protocolVersion *BitString) bool {
 	return protocolVersion == nil || protocolVersion.BitLength >= 1 && len(protocolVersion.Bytes) != 0 && protocolVersion.Bytes[0]&0x80 != 0
 }

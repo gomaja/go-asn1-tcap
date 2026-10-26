@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
-
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
 
@@ -106,7 +104,7 @@ func ExampleNewAcceptDialogue() {
 // Refuse a dialogue whose application context is not supported, offering
 // another one (ITU-T Q.774 (06/97) clause 3.2.1).
 func ExampleNewRejectDialogue() {
-	notSupported := wire.AssociateSourceDiagnosticDialogueServiceUserValueApplicationContextNameNotSupportedValue()
+	notSupported := tcap.NewDialogueServiceUserDiagnostic(tcap.DialogueServiceUserApplicationContextNameNotSupported)
 	refusal := &tcap.Abort{
 		DTID: tcap.TransactionID{0x01, 0x02, 0x03, 0x04},
 		Dialogue: tcap.NewRejectDialogue("0.4.0.0.1.0.20.2",
@@ -126,7 +124,7 @@ func ExampleNewRejectDialogue() {
 // Abort a transaction from the transaction sub-layer with a P-Abort cause
 // (ITU-T Q.773 (06/97) Table 12).
 func ExampleAbort_Marshal() {
-	cause := wire.PAbortCauseUnrecognizedTransactionIDValue()
+	cause := tcap.NewPAbortCause(tcap.PAbortCauseUnrecognizedTransactionID)
 	abort := &tcap.Abort{DTID: tcap.TransactionID{0x01, 0x02, 0x03, 0x04}, PAbortCause: &cause}
 	out, err := abort.Marshal()
 	if err != nil {
