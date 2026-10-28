@@ -203,14 +203,16 @@ type ParseError struct {
 // limit that stops the decoding gives resourceLimitation, since the receiver
 // lacked the resources to decode a message that may be valid; a limit met
 // only while Parse inspects the failed message does not change the cause.
-// A message that is not one valid BER element under
-// the encoding rules of Q.773 clause 4.1.1, or whose decoding stops at an
-// encoding error, gives badlyFormattedTransactionPortion. Any other failure,
-// such as a missing, unexpected or misplaced element or a value outside its
-// ASN.1 constraint, gives incorrectTransactionPortion. When a message has
-// more than one fault, a fault in its BER structure counts first; otherwise
-// the fault at which decoding stops decides. unrecognizedTransactionID is
-// never returned: whether a DTID is assigned is transaction state.
+// A message whose BER structure breaks the encoding rules of Q.773 clause
+// 4.1.1, such as a truncated message or octets after it, gives
+// badlyFormattedTransactionPortion, and so does one whose decoding stops at
+// an encoding error, such as an INTEGER without contents octets. Any other
+// failure, such as a missing, unexpected or misplaced element or a value
+// outside its ASN.1 constraint, gives incorrectTransactionPortion. Parse
+// checks the BER structure of the whole message but decodes it only up to
+// the first fault, so an encoding error in the contents of an element after
+// that fault does not count. unrecognizedTransactionID is never returned:
+// whether a DTID is assigned is transaction state.
 //
 // Whether to send the Abort is for Q.774 clause 3.3.4 and Table 7: only when
 // the originating transaction ID is derivable, and never for a

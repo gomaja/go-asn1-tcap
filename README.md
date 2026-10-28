@@ -270,7 +270,7 @@ if errors.As(err, &perr) {
     switch perr.Portion {
     case tcap.PortionTransaction:
         if cause, ok := perr.PAbortCause(); ok && perr.OTID != nil {
-            // answer with &tcap.Abort{DTID: perr.OTID, PAbortCause: &cause}
+            reply(&tcap.Abort{DTID: perr.OTID, PAbortCause: &cause})
         }
     case tcap.PortionDialogue:
         // answer with an Abort carrying tcap.NewProviderAbortDialogue()
