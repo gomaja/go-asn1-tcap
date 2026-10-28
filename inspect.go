@@ -14,7 +14,8 @@ import (
 // are the caller's decode limits; failure is the codec's.
 func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, limits ber.DecodeLimits, failure error) *ParseError {
 	opts, _ = ber.StageDecodeReports(opts)
-	pe := &ParseError{Portion: PortionTransaction, ComponentIndex: -1}
+	pe := &ParseError{Portion: PortionTransaction, ComponentIndex: -1,
+		pAbortCause: PAbortCauseBadlyFormattedTransactionPortion, pAbortCauseSet: true}
 	var decoded *wire.DecodeError
 	var prefix wire.TransactionPrefix
 	if errors.As(failure, &decoded) {
@@ -30,6 +31,25 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	if err != nil {
 		return pe
 	}
+	var validation error
+	defer func() {
+		// Q.774 (06/97) Figure A.3 sheet 1 checks message type first.
+		// Q.773 (06/97) Table 8 defines the full constructed message tags;
+		// their primitive forms are unrecognized, as in Err and MessageType.
+		switch {
+		case inspectedMessageType(t) == "":
+			pe.pAbortCause = PAbortCauseUnrecognizedMessageType
+		case errors.Is(failure, ber.ErrResourceLimit):
+			// The codec stopped at a decode limit, so the message may be
+			// valid. A limit met only while inspecting it does not override
+			// the codec's failure: Figure A.3 checks the syntax first.
+			pe.pAbortCause = PAbortCauseResourceLimitation
+		case invalidTransactionEncoding(validation) || invalidTransactionEncoding(failure) || errors.Is(validation, ber.ErrExtraData):
+			pe.pAbortCause = PAbortCauseBadlyFormattedTransactionPortion
+		default:
+			pe.pAbortCause = PAbortCauseIncorrectTransactionPortion
+		}
+	}()
 	pe.MessageType = inspectedMessageType(t)
 	if pe.MessageType == "" {
 		pe.Err = ErrUnrecognizedMessageType
@@ -44,7 +64,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	// Without a source, the scan covers a whole TCMessage with the codec's
 	// Q.773 clause 4.1.1 scope, so it stops where the codec does; parameters
 	// stay TC-user syntax (ITU-T X.690 (02/2021) clause 8.15).
-	validation := ber.ValidateBERElement(data, ber.TrackTCAPForm(opts)...)
+	validation = ber.ValidateBERElement(data, ber.TrackTCAPForm(opts)...)
 	if errors.Is(validation, ber.ErrResourceLimit) {
 		// Only the codec's limit skips repeat counting. An inspection limit
 		// still permits counting immediate tags within the scan's budget.
@@ -186,6 +206,21 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		pe.Portion = PortionDialogue
 	}
 	return pe
+}
+
+// Q.773 (06/97) clause 4.1.1 governs encoding; its Annex A constraints
+// instead describe validly encoded but incorrect transaction elements.
+// ErrExtraData is deliberately excluded here: only whole-element validation
+// establishes trailing octets; a typed SEQUENCE can report leftover children.
+func invalidTransactionEncoding(err error) bool {
+	var validation *ber.ValidationError
+	if errors.As(err, &validation) {
+		return validation.Rule.Document == "ITU-T X.690" ||
+			validation.Kind == ber.ProtocolRule && validation.Rule.Document == "ITU-T Q.773" && validation.Rule.Clause == "4.1.1"
+	}
+	return errors.Is(err, ber.ErrTruncated) || errors.Is(err, ber.ErrInvalidTag) ||
+		errors.Is(err, ber.ErrInvalidLength) || errors.Is(err, ber.ErrIndefiniteLength) ||
+		errors.Is(err, ber.ErrInvalidValue)
 }
 
 // isDialogueFailure uses the codec's wire location rather than its ASN.1
