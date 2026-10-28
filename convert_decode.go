@@ -29,7 +29,8 @@ func decodeMessage(w *wire.TCMessage) (Message, *ParseError) {
 			cause, dp = clonePointer(r.PAbortCause), r.UAbortCause
 		}
 	default:
-		return nil, &ParseError{Portion: PortionTransaction, ComponentIndex: -1, Err: ErrUnrecognizedMessageType}
+		return nil, &ParseError{Portion: PortionTransaction, ComponentIndex: -1, Err: ErrUnrecognizedMessageType,
+			pAbortCause: PAbortCauseUnrecognizedMessageType, pAbortCauseSet: true}
 	}
 	pe := &ParseError{MessageType: mt, ComponentIndex: -1}
 	if mt == MessageTypeBegin || mt == MessageTypeContinue {

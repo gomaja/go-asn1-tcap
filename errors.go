@@ -132,6 +132,9 @@ const (
 // service provider for one in the dialogue portion (clause 3.2.2.1), and a
 // Reject for one in the component portion (clause 3.2.2.2, Table 5), except
 // a malformed Reject, which is discarded and reported only to the local user.
+// PAbortCause gives the P-Abort cause for the transaction portion, which
+// Parse keeps in unexported fields: compare ParseErrors by their exported
+// fields.
 //
 // None of its fields alias the parsed data.
 type ParseError struct {
@@ -185,6 +188,38 @@ type ParseError struct {
 	// ErrUnrecognizedMessageType and a decode limit met only while
 	// inspecting the message, if any.
 	Err error
+
+	pAbortCause    int64
+	pAbortCauseSet bool
+}
+
+// PAbortCause returns the P-Abort cause of ITU-T Q.773 (06/97) Table 12 that
+// a failure in the transaction portion calls for. It returns false for a
+// failure in another portion, a nil e, and a ParseError that Parse did not
+// return. Each call returns a new value.
+//
+// The message type is checked first, as in Q.774 (06/97) Figure A.3: a tag
+// that is not a TCAP message type gives unrecognizedMessageType. A decode
+// limit that stops the decoding gives resourceLimitation, since the receiver
+// lacked the resources to decode a message that may be valid; a limit met
+// only while Parse inspects the failed message does not change the cause.
+// A message that is not one valid BER element under
+// the encoding rules of Q.773 clause 4.1.1, or whose decoding stops at an
+// encoding error, gives badlyFormattedTransactionPortion. Any other failure,
+// such as a missing, unexpected or misplaced element or a value outside its
+// ASN.1 constraint, gives incorrectTransactionPortion. When a message has
+// more than one fault, a fault in its BER structure counts first; otherwise
+// the fault at which decoding stops decides. unrecognizedTransactionID is
+// never returned: whether a DTID is assigned is transaction state.
+//
+// Whether to send the Abort is for Q.774 clause 3.3.4 and Table 7: only when
+// the originating transaction ID is derivable, and never for a
+// Unidirectional, End or Abort.
+func (e *ParseError) PAbortCause() (PAbortCause, bool) {
+	if e == nil || e.Portion != PortionTransaction || !e.pAbortCauseSet {
+		return PAbortCause{}, false
+	}
+	return NewPAbortCause(e.pAbortCause), true
 }
 
 // Error describes the failure.

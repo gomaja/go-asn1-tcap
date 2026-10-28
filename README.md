@@ -250,12 +250,13 @@ The codec's errors are go-asn1's types and sentinels. To match them with
 - Every `Parse` error caused by the data is a `*tcap.ParseError` that tells a
   TCAP stack how to react, as required by Q.774: the message type, the
   transaction IDs derivable under this package's Table 7 policy, and the
-  portion that failed. A failure in the transaction portion
-  calls for an Abort with a P-Abort cause to the originating transaction ID,
-  when it can be derived (clause 3.3.4, Table 7: an End or an Abort is only
-  discarded). One in the dialogue portion calls for an ABRT from the dialogue
-  service provider (clause 3.2.2.1). One in the component portion calls for a
-  Reject (clause 3.2.2.2, Table 5): the error gives the position and type of
+  portion that failed. A failure in the transaction portion calls for an
+  Abort to the originating transaction ID, when it can be derived, with the
+  P-Abort cause that `perr.PAbortCause()` returns (clause 3.3.4, Table 7: a
+  Unidirectional, End or Abort is never answered with an Abort). One in the
+  dialogue portion calls for an ABRT from the dialogue service provider
+  (clause 3.2.2.1). One in the component portion calls for a Reject (clause
+  3.2.2.2, Table 5): the error gives the position and type of
   the failing component, its invoke ID when it can be derived, the dialogue,
   and the valid components that precede it. A malformed Reject is discarded,
   not rejected.
@@ -268,8 +269,8 @@ var perr *tcap.ParseError
 if errors.As(err, &perr) {
     switch perr.Portion {
     case tcap.PortionTransaction:
-        if perr.OTID != nil {
-            // answer with an Abort whose DTID is perr.OTID and a P-Abort cause
+        if cause, ok := perr.PAbortCause(); ok && perr.OTID != nil {
+            // answer with &tcap.Abort{DTID: perr.OTID, PAbortCause: &cause}
         }
     case tcap.PortionDialogue:
         // answer with an Abort carrying tcap.NewProviderAbortDialogue()

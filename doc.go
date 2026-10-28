@@ -89,8 +89,11 @@
 // error returned by Parse because of the data is a *ParseError, which also
 // tells a stack which portion of the message failed and which transaction IDs
 // were derivable, as needed for the abnormal procedures of Q.774 clauses
-// 3.2.2 and 3.3.4. An invalid ParseOption returns an error wrapping
-// ErrInvalidParseOption instead.
+// 3.2.2 and 3.3.4. For a transaction-portion failure, ParseError.PAbortCause
+// supplies the cause of Q.773 (06/97) Table 12; the stack applies Q.774
+// (06/97) clause 3.3.4 and Table 7 to decide whether to send the Abort.
+// An invalid ParseOption returns an error wrapping ErrInvalidParseOption
+// instead.
 //
 // The codec checks that every component ID is present where required and
 // lies in -128..127 (Q.773 clause 4.2.2.2). This package uses int64 for

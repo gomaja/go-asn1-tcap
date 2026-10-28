@@ -110,7 +110,8 @@ func Parse(data []byte, opts ...ParseOption) (message Message, returnErr error) 
 		return nil, fmt.Errorf("%w: %w", ErrInvalidParseOption, err)
 	}
 	if len(data) == 0 {
-		return nil, &ParseError{Portion: PortionTransaction, ComponentIndex: -1, Err: ErrEmptyData}
+		return nil, &ParseError{Portion: PortionTransaction, ComponentIndex: -1, Err: ErrEmptyData,
+			pAbortCause: PAbortCauseBadlyFormattedTransactionPortion, pAbortCauseSet: true}
 	}
 	// Stage reports across codec decoding and the receiver rules.
 	decodeOpts, finish := ber.StageDecodeReports(decodeOpts)
