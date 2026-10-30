@@ -84,15 +84,15 @@
 // is reported with codec errors such as ber.ErrTruncated or *ber.ElementError.
 // The rules this package checks itself are reported with its Err sentinels;
 // use errors.Is. Marshal wraps them in a FieldError that names the field.
-// Other codec failures, such as an unexpected tag or a missing field, keep
-// the codec's error and match no sentinel of this package. Every
+// The codec reports a validly encoded element that the ASN.1 does not admit,
+// and a missing mandatory component, with ber.ErrUnexpectedElement. Every
 // error returned by Parse because of the data is a *ParseError, which also
-// tells a stack which portion of the message failed and which transaction IDs
-// were derivable, as needed for the abnormal procedures of Q.774 clauses
+// tells a stack which portion of the message failed and which transaction
+// IDs were derivable, as needed for the abnormal procedures of Q.774 clauses
 // 3.2.2 and 3.3.4. For a transaction-portion failure, ParseError.PAbortCause
 // supplies the cause of Q.773 (06/97) Table 12; the stack applies Q.774
-// (06/97) clause 3.3.4 and Table 7 to decide whether to send the Abort.
-// An invalid ParseOption returns an error wrapping ErrInvalidParseOption
+// (06/97) clause 3.3.4 and Table 7 to decide whether to send the Abort. An
+// invalid ParseOption returns an error wrapping ErrInvalidParseOption
 // instead.
 //
 // The codec checks that every component ID is present where required and

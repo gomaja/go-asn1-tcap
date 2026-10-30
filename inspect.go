@@ -210,8 +210,9 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 
 // Q.773 (06/97) clause 4.1.1 governs encoding; its Annex A constraints
 // instead describe validly encoded but incorrect transaction elements.
-// ErrExtraData is deliberately excluded here: only whole-element validation
-// establishes trailing octets; a typed SEQUENCE can report leftover children.
+// ErrExtraData is excluded here: whole-element validation establishes
+// trailing octets, and the codec reports leftover children of a constructed
+// value as ErrUnexpectedElement.
 func invalidTransactionEncoding(err error) bool {
 	var validation *ber.ValidationError
 	if errors.As(err, &validation) {
