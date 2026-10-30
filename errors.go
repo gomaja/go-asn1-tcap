@@ -9,12 +9,13 @@ import (
 // Errors reported by Marshal and Parse. ASN.1 size and value constraints are
 // reported as *ber.ValidationError instead. BER structure errors retain the
 // codec's causes, including parameter and EXTERNAL single-ASN1-type errors.
-// A validly encoded element that the message does not admit, and a missing
-// one, match ber.ErrUnexpectedElement. The codec checks the ASN.1 of Q.773
-// Annex A and X.880, the encoding rules of X.680 and X.690, and Q.773
-// clauses 4.1.1 (in TCAP's own syntax), 4.2.2.2 and 4.2.3. The sentinels
-// below report the rules this package applies itself: the Q.774 procedure
-// rules and the limits of its Go model.
+// The codec checks the ASN.1 of Q.773 Annex A and X.880, the encoding rules
+// of X.680 and X.690, and Q.773 clauses 4.1.1 (in TCAP's own syntax),
+// 4.2.2.2 and 4.2.3; it reports a validly encoded element that the ASN.1
+// does not admit, and a missing mandatory component, with
+// ber.ErrUnexpectedElement. The sentinels below report the rules this
+// package applies itself: the Q.774 procedure rules and the limits of its Go
+// model.
 var (
 	// ErrEmptyData reports that Parse received no octets.
 	ErrEmptyData = errors.New("tcap: empty data")
@@ -207,14 +208,16 @@ type ParseError struct {
 // only while Parse inspects the failed message does not change the cause.
 // A message that breaks the encoding rules of Q.773 clause 4.1.1, such as a
 // truncated message, octets after it or an INTEGER without contents octets,
-// gives badlyFormattedTransactionPortion. Parse checks the encoding of the
-// whole message within the decode limits, so an encoding error after the
-// first fault counts too. The contents of an IMPLICIT INTEGER out of its
-// place, such as a P-Abort cause after an unexpected element, are not
-// checked: its tag does not give its type. Any other failure, such as a
-// missing, unexpected or misplaced element or a value outside its ASN.1
-// constraint, gives incorrectTransactionPortion. unrecognizedTransactionID
-// is never returned: whether a DTID is assigned is transaction state.
+// gives badlyFormattedTransactionPortion. Parse also checks the encoding of
+// the whole message within the decode limits, with ber.ValidateBERElement
+// and the TCAP profile, so an encoding error after the first fault counts
+// too where that check finds it. It does not find one, for example, in the
+// contents of an IMPLICIT INTEGER out of its place, such as a P-Abort cause
+// after an unexpected element, whose tag does not give its type. Any other
+// failure, such as a missing, unexpected or misplaced element or a value
+// outside its ASN.1 constraint, gives incorrectTransactionPortion.
+// unrecognizedTransactionID is never returned: whether a DTID is assigned is
+// transaction state.
 //
 // Whether to send the Abort is for Q.774 clause 3.3.4 and Table 7: only when
 // the originating transaction ID is derivable, and never for a
