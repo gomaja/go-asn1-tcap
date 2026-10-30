@@ -236,10 +236,10 @@ The codec's errors are go-asn1's types and sentinels. To match them with
 - Malformed BER, including parameter and EXTERNAL single-ASN1-type bytes,
   returns codec errors such as `ber.ErrExtraData`, `ber.ErrTruncated`,
   `ber.ErrInvalidTag` or `*ber.ElementError`.
+- A validly encoded element that the message does not admit, such as one with
+  an unexpected tag, and a missing element match `ber.ErrUnexpectedElement`.
 - The rules this package checks itself have an `Err` sentinel (`errors.Is`),
-  for example `tcap.ErrUnexpectedDialoguePDU`. Other codec failures, such as an
-  unexpected tag or a missing field, keep the codec's error and match no
-  sentinel of this package.
+  for example `tcap.ErrUnexpectedDialoguePDU`.
 - `Marshal` reports rules checked here in a `*tcap.FieldError`. Codec errors
   retain their generated ASN.1 paths and causes, including `*ber.ValidationError`.
 - When the codec cannot decode a message, its error is a `*wire.DecodeError`

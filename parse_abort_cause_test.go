@@ -60,6 +60,11 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "empty OTID", input: "62024800", cause: incorrect},
 		{name: "Begin missing OTID", input: "6200", cause: incorrect},
 		{name: "Begin with DTID", input: "6203490101", cause: incorrect},
+		// A missing or wrong EXTERNAL in the dialogue portion is an element out
+		// of place, not an encoding error (X.690 clause 8.14.3); the NULL after
+		// it keeps the failure in the transaction portion.
+		{name: "empty dialogue portion and unexpected NULL", input: "62074801016b000500", cause: incorrect},
+		{name: "NULL dialogue portion and unexpected NULL", input: "62094801016b0205000500", cause: incorrect},
 		{name: "Begin repeated OTID", input: "6206480101480102", cause: incorrect},
 		{name: "Continue wrong tag", input: "650648027f010500", cause: incorrect},
 		{name: "Continue reversed IDs", input: "6506490102480101", cause: incorrect},
@@ -67,6 +72,13 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "Unidirectional missing components", input: "6100", cause: incorrect},
 		{name: "Abort missing DTID", input: "6700", cause: incorrect},
 		{name: "empty P-Abort INTEGER", input: "67054901014a00", cause: bad},
+		// The P-Abort cause is in its place after a DTID that violates SIZE
+		// (1..4), so its empty contents count (X.690 clause 8.3.1).
+		{name: "empty DTID and empty P-Abort INTEGER", input: "670449004a00", cause: bad},
+		// After an element that Abort does not admit, the P-Abort cause is out
+		// of its place: its IMPLICIT tag does not give its type, so its contents
+		// are not checked (X.690 clause 8.14.4).
+		{name: "unexpected element and empty P-Abort INTEGER", input: "67074901014f004a00", cause: incorrect},
 		{name: "P-Abort cause 200", input: "67074901014a0200c8", cause: incorrect},
 		{name: "constructed P-Abort INTEGER", input: "67074901016a020500", cause: bad},
 		{name: "malformed after wrong tag", input: "62074901016c020201", cause: bad},
@@ -74,6 +86,11 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "valid encoding wrong layout", input: "620a4901016c05a103020101", cause: incorrect},
 		{name: "invalid EXTERNAL form and repeated OTID", input: "620f4801016b07280506012a8000480102", cause: bad},
 		{name: "component failure", input: "620a4801016c05a103020101", portion: tcap.PortionComponent},
+		// With a sound transaction portion, a missing EXTERNAL (X.690 clause
+		// 8.14.3) or an encoding outside [0] to [2] (clause 8.18.1) fails the
+		// dialogue portion.
+		{name: "empty dialogue portion", input: "62054801016b00", portion: tcap.PortionDialogue},
+		{name: "EXTERNAL encoding [3]", input: "620c4801016b07280506012a8300", portion: tcap.PortionDialogue},
 		{name: "dialogue failure", input: tlv("62", hexOTID, dialoguePortion(hexDialogueAS, hexAAREAcc)), portion: tcap.PortionDialogue},
 		// Q.773 clause 4.2.2.2 is not an encoding rule: an invoke ID of 200,
 		// then a NULL that Begin does not admit.
