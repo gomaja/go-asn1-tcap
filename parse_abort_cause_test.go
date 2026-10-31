@@ -96,10 +96,38 @@ func TestParsePAbortCause(t *testing.T) {
 		// then a NULL that Begin does not admit.
 		{name: "invoke ID out of range and unexpected NULL", input: "62104801016c09a107020200c802012d0500", cause: incorrect},
 		{name: "invoke ID out of range and unexpected NULL tolerant", input: "62104801016c09a107020200c802012d0500", tolerant: true, cause: incorrect},
+		// Behind an invoke ID out of range and an unexpected NULL, the NULL
+		// of linkedId absent [1] has a contents octet (ITU-T X.690 (02/2021)
+		// clauses 8.8.2 and 8.14.4).
+		{name: "linked ID absent with contents", input: "62134801016c0ca10a020200c881010002012d0500", cause: bad},
+		{name: "linked ID absent with contents tolerant", input: "62134801016c0ca10a020200c881010002012d0500", tolerant: true, cause: bad},
+		// After the DTID, a REAL that Abort does not admit, with base bits
+		// 11, which ITU-T X.690 (02/2021) clause 8.5.7.2 reserves. Its
+		// universal tag gives its type wherever it stands.
+		{name: "reserved REAL base after DTID", input: "67084901010903b00001", cause: bad},
+		{name: "reserved REAL base after DTID tolerant", input: "67084901010903b00001", tolerant: true, cause: bad},
+		// An empty OTID violates SIZE (1..4) but keeps the dialogue portion
+		// in its place, where application-context-name [1], an EXPLICIT
+		// tag, must be constructed (ITU-T X.690 (02/2021) clause 8.14.3).
+		{name: "primitive application context after empty OTID", input: "621648006b122810060700118605010101a005600381012a", cause: bad},
+		{name: "primitive application context after empty OTID tolerant", input: "621648006b122810060700118605010101a005600381012a", tolerant: true, portion: tcap.PortionDialogue},
+		// An EXTERNAL's single-ASN1-type [0] must be constructed in a
+		// parameter too (ITU-T X.690 (02/2021) clauses 8.14.3 and 8.18.1).
+		{name: "primitive EXTERNAL encoding in parameter and unexpected NULL", input: "62164801016c0fa10d020200c802012d2804800205000500", cause: bad},
+		{name: "primitive EXTERNAL encoding in parameter and unexpected NULL tolerant", input: "62164801016c0fa10d020200c802012d2804800205000500", tolerant: true, cause: bad},
+		// A repeated transaction ID is out of its place (Q.773 (06/97)
+		// clause 3.1), so its IMPLICIT tag gives no type to check (ITU-T
+		// X.690 (02/2021) clause 8.14.4). The codec reads into it, and
+		// tight limits stop it there.
+		{name: "constructed repeated OTID", input: "620e4801016803040102300430020500", cause: incorrect},
+		{name: "constructed repeated DTID", input: "65114801014901026903040103300430020500", cause: incorrect},
+		{name: "constructed repeated OTID codec depth limit", input: "620e4801016803040102300430020500", limits: tcap.DecodeLimits{MaxDepth: 2}, cause: resource},
+		{name: "constructed repeated DTID codec element limit", input: "65114801014901026903040103300430020500", limits: tcap.DecodeLimits{MaxElements: 4}, cause: resource},
 		{name: "codec limit", input: "6203480101", limits: tcap.DecodeLimits{MaxWork: 1}, cause: resource},
 		// A limit met only while inspecting keeps the codec's failure: a
-		// constructed DTID (Q.773 clause 4.1.1), and a truncated NULL.
-		{name: "inspection limit after 4.1.1 failure", input: "65114801014901026903040103300430020500", limits: tcap.DecodeLimits{MaxElements: 4}, cause: bad},
+		// repeated DTID with a long-form length below 128 (Q.773 clause
+		// 4.1.1), and a truncated NULL.
+		{name: "inspection limit after 4.1.1 failure", input: "6512480101490102698103040103300430020500", limits: tcap.DecodeLimits{MaxElements: 4}, cause: bad},
 		{name: "inspection limit after truncation", input: "620448010105", limits: tcap.DecodeLimits{MaxElements: 2}, cause: bad},
 	}
 	// Each recognized message type can be malformed, have an incorrect layout,
@@ -195,7 +223,7 @@ func TestParsePAbortCauseOwnership(t *testing.T) {
 // TestParsePAbortCauseInspectionLimit: a limit met only while inspecting a
 // failed message is reported in Err, and the cause stays the codec's.
 func TestParsePAbortCauseInspectionLimit(t *testing.T) {
-	data := hx("65114801014901026903040103300430020500")
+	data := hx("6512480101490102698103040103300430020500")
 	limits := tcap.DecodeLimits{MaxElements: 4}
 	var w wire.TCMessage
 	err := w.UnmarshalBER(data, ber.WithDecodeLimits(limits))

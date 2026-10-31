@@ -156,11 +156,11 @@ func TestProcedureCodecLimitKeepsRepeatedPrefix(t *testing.T) {
 
 // Only a codec limit skips the Table 7 repeat scan. A limit reached later
 // during failure inspection still counts the immediate tags within budget.
-// The repeated ID is a constructed OCTET STRING, which the inspection
+// The repeated ID has a long-form length below 128, which the inspection
 // refuses where the codec does (Q.773 clause 4.1.1), so a limit is reported
 // only where the inspection reaches it first.
 func TestProcedureInspectionLimitCountsRepeatedPrefix(t *testing.T) {
-	const begin, cont = "620e4801016803040102300430020500", "65114801014901026903040103300430020500"
+	const begin, cont = "620f480101688103040102300430020500", "6512480101490102698103040103300430020500"
 	for _, tc := range []struct {
 		input, otid, dtid string
 		limits            ber.DecodeLimits
@@ -185,9 +185,41 @@ func TestProcedureInspectionLimitCountsRepeatedPrefix(t *testing.T) {
 			t.Fatalf("%s, limits %+v: %v, IDs %s/%s, want %s/%s, limit %t", tc.input, tc.limits, pe, pe.OTID, pe.DTID, tc.otid, tc.dtid, tc.limit)
 		}
 	}
-	// The duplicate DTID child ends beyond MaxWork 10, so it is not counted.
-	pe := reviewFailure(t, "65114801014901026903040103300430020500", tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: 10}))
+	// The duplicate DTID child ends beyond MaxWork 11, so it is not counted.
+	var w wire.TCMessage
+	if err := w.UnmarshalBER(hx(cont), ber.WithDecodeLimits(ber.DecodeLimits{MaxWork: 11})); err == nil || errors.Is(err, ber.ErrResourceLimit) {
+		t.Fatalf("codec must fail before the limit: %v", err)
+	}
+	pe := reviewFailure(t, cont, tcap.WithDecodeLimits(ber.DecodeLimits{MaxWork: 11}))
 	if !errors.Is(pe, ber.ErrResourceLimit) || pe.OTID.String() != "01" || pe.DTID.String() != "02" {
 		t.Fatalf("unread duplicate changed Prefix: %v, IDs %s/%s", pe, pe.OTID, pe.DTID)
+	}
+}
+
+// A repeated ID out of its place gives no type to check (ITU-T X.690
+// (02/2021) clause 8.14.4), so the codec reads into it and stops at these
+// limits. The IDs it accepted stay derivable (Q.774 (06/97) Table 7).
+func TestProcedureRepeatedIDCodecLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name, input, otid, dtid string
+	}{
+		{"Begin", "620e4801016803040102300430020500", "01", ""},
+		{"Continue", "65114801014901026903040103300430020500", "01", "02"},
+	} {
+		for _, limits := range []ber.DecodeLimits{{MaxDepth: 2}, {MaxElements: 4}, {MaxElements: 5}, {MaxWork: 10}, {MaxWork: 13}} {
+			t.Run(tc.name+"/"+fmt.Sprint(limits), func(t *testing.T) {
+				var w wire.TCMessage
+				codecErr := w.UnmarshalBER(hx(tc.input), ber.WithDecodeLimits(limits))
+				if !errors.Is(codecErr, ber.ErrResourceLimit) {
+					t.Fatalf("codec = %v; want resource limit", codecErr)
+				}
+				pe := reviewFailure(t, tc.input, tcap.WithDecodeLimits(limits))
+				cause, ok := pe.PAbortCause()
+				value, fits := cause.AsInt64()
+				if !errors.Is(pe, ber.ErrResourceLimit) || pe.Portion != tcap.PortionTransaction || pe.OTID.String() != tc.otid || pe.DTID.String() != tc.dtid || !ok || !fits || value != tcap.PAbortCauseResourceLimitation {
+					t.Fatalf("limits %+v: %v, IDs %s/%s, cause %v, %t", limits, pe, pe.OTID, pe.DTID, cause, ok)
+				}
+			})
+		}
 	}
 }
