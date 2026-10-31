@@ -963,8 +963,15 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:     success, ref: "Q.773 (06/97) clause 4; Q.774 (06/97) clauses 3.2.2.1 and 3.2.2.2, Table 5; Q.773 (06/97) clause 4.1.1",
 		},
 		{
+			name: "begin constructed protocol version after empty OTID strict", hex: "621e48006b1a2818060700118605010101a00d600ba00403020780a10306012a",
+			want: badBER, ref: "Q.773 (06/97) clause 4.1.1; ITU-T X.690 (02/2021) clause 8.14.4",
+		},
+		// After a DTID where the OTID belongs, the dialogue portion is out of
+		// its place too, and the IMPLICIT protocol-version gives no type to
+		// check (ITU-T X.690 (02/2021) clause 8.14.4).
+		{
 			name: "begin constructed protocol version wrong transaction strict", hex: "621f4901026b1a2818060700118605010101a00d600ba00403020780a10306012a",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1; Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
+			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A; ITU-T X.690 (02/2021) clause 8.14.4",
 		},
 		{
 			name: "begin constructed protocol version wrong transaction tolerant", hex: "621f4901026b1a2818060700118605010101a00d600ba00403020780a10306012a",
