@@ -211,11 +211,14 @@ type ParseError struct {
 // gives badlyFormattedTransactionPortion. Parse also checks the encoding of
 // the whole message within the decode limits, with ber.ValidateBERElement
 // and the TCAP profile, so an encoding error after the first fault counts
-// too where that check finds it. It does not find one, for example, in the
-// contents of an IMPLICIT INTEGER out of its place, such as a P-Abort cause
-// after an unexpected element, whose tag does not give its type. Any other
-// failure, such as a missing, unexpected or misplaced element or a value
-// outside its ASN.1 constraint, gives incorrectTransactionPortion.
+// too where that check finds it. An IMPLICIT tag out of its place gives no
+// type, so the rules of that type are not checked there: for example, the
+// contents of a P-Abort cause after an unexpected element, the form of a
+// repeated transaction ID, or a protocol-version in a dialogue portion that
+// follows a wrong transaction ID. Lengths, and elements with a universal
+// tag, are still checked. Any other failure, such as a missing, unexpected or
+// misplaced element or a value outside its ASN.1 constraint, gives
+// incorrectTransactionPortion.
 // unrecognizedTransactionID is never returned: whether a DTID is assigned is
 // transaction state.
 //

@@ -56,7 +56,7 @@ type parseConfig struct {
 
 // WithTolerance makes Parse accept other valid BER representations and
 // values outside their ASN.1 constraints, recording each violation in log
-// only if Parse succeeds. BER structure errors and the rules this package
+// only if Parse succeeds. BER encoding errors and the rules this package
 // applies itself, such as the dialogue rules of ITU-T Q.774 (06/97) Table 3,
 // apply in both modes. Marshal stays strict: it encodes TCAP's own fields
 // afresh, so a representation tolerated there needs no correction, and it
