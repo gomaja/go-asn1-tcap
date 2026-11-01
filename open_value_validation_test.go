@@ -32,6 +32,18 @@ func TestOpenValueEncodingValidation(t *testing.T) {
 		// 8.24.1). The data value is [2].
 		{"EMBEDDED PDV primitive identification", "2b06800285008200", ber.ErrInvalidTag},
 		{"CHARACTER STRING primitive identification", "3d06800285008200", ber.ErrInvalidTag},
+		// The contents octets of that [0] are the complete base encoding
+		// (ITU-T X.690 (02/2021) clause 8.14.3), so it holds exactly one
+		// value. In the indefinite form, the contents octets end at the
+		// end-of-contents octets (clause 8.1.3.6).
+		{"EXTERNAL empty single-ASN1-type", "280506012aa000", ber.ErrUnexpectedElement},
+		{"EXTERNAL doubled single-ASN1-type", "280906012aa00405000500", ber.ErrUnexpectedElement},
+		{"EXTERNAL indefinite empty single-ASN1-type", "280706012aa0800000", ber.ErrUnexpectedElement},
+		{"EXTERNAL indefinite doubled single-ASN1-type", "280b06012aa080050005000000", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV empty identification", "2b04a0008200", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV doubled identification", "2b08a004850085008200", ber.ErrUnexpectedElement},
+		{"CHARACTER STRING empty identification", "3d04a0008200", ber.ErrUnexpectedElement},
+		{"CHARACTER STRING doubled identification", "3d08a004850085008200", ber.ErrUnexpectedElement},
 	} {
 		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "UserInformation", "Opaque"} {
 			t.Run(tc.name+"/"+kind, func(t *testing.T) {

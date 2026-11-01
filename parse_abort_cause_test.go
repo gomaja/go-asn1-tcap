@@ -123,6 +123,29 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "constructed repeated DTID", input: "65114801014901026903040103300430020500", cause: incorrect},
 		{name: "constructed repeated OTID codec depth limit", input: "620e4801016803040102300430020500", limits: tcap.DecodeLimits{MaxDepth: 2}, cause: resource},
 		{name: "constructed repeated DTID codec element limit", input: "65114801014901026903040103300430020500", limits: tcap.DecodeLimits{MaxElements: 4}, cause: resource},
+		// After a NULL that the message does not admit, the component
+		// portion is out of its place. Its arguments, results and parameters
+		// are still the TC-user's syntax (ITU-T X.690 (02/2021) clause
+		// 8.15), which Q.773 clause 4.1.1 does not cover, so a long-form
+		// length below 128 or a constructed OCTET STRING there is not an
+		// encoding fault. Its own fields remain TCAP syntax.
+		{name: "misplaced Invoke argument with long-form length", input: "621548010105006c0ea10c020100020100048103616263", cause: incorrect},
+		{name: "misplaced Invoke argument with long-form length tolerant", input: "621548010105006c0ea10c020100020100048103616263", tolerant: true, cause: incorrect},
+		{name: "misplaced ReturnResultLast result with long-form length", input: "621748010105006c10a20e0201003009020100048103616263", cause: incorrect},
+		{name: "misplaced ReturnResultNotLast result with long-form length", input: "621748010105006c10a70e0201003009020100048103616263", cause: incorrect},
+		{name: "misplaced ReturnError parameter with long-form length", input: "621548010105006c0ea30c020100020101048103616263", cause: incorrect},
+		{name: "misplaced Invoke argument with constructed OCTET STRING in End", input: "641649010205006c0fa10d02010102010124050403616263", cause: incorrect},
+		{name: "misplaced Invoke argument with constructed OCTET STRING in Unidirectional", input: "611105006c0da10b0201010201012403040161", cause: incorrect},
+		{name: "misplaced invoke ID with long-form length", input: "621548010105006c0ea10c028101000201000403616263", cause: bad},
+		// An empty [0] in an EXTERNAL is a missing element (ITU-T X.690
+		// (02/2021) clause 8.14.3), not an encoding fault, and the
+		// whole-message check stops there as well, so an encoding fault
+		// after it does not count: a truncated INTEGER after an argument's
+		// EXTERNAL, and an INTEGER without contents octets after the
+		// dialogue portion's.
+		{name: "empty EXTERNAL [0] in argument then truncated INTEGER", input: "62164801016c0fa10d020101020101280506012aa0000201", cause: incorrect},
+		{name: "empty EXTERNAL [0] in argument then truncated INTEGER tolerant", input: "62164801016c0fa10d020101020101280506012aa0000201", tolerant: true, cause: incorrect},
+		{name: "empty dialogue EXTERNAL [0] then INTEGER without contents", input: "62144801016b0d280b060700118605010101a0000200", cause: incorrect},
 		{name: "codec limit", input: "6203480101", limits: tcap.DecodeLimits{MaxWork: 1}, cause: resource},
 		// A limit met only while inspecting keeps the codec's failure: a
 		// repeated DTID with a long-form length below 128 (Q.773 clause
