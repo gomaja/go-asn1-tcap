@@ -317,15 +317,15 @@ information and Opaque EXTERNALs are the TC-user's syntax (ITU-T X.690
 (02/2021) clauses 8.15 and 8.18), which Q.773 clause 4.1.1 does not cover.
 Parameters and single-ASN1-type contents keep the BER bytes they were given
 or received; `Parse` in either mode and `Marshal` check only that they are
-well-formed BER. That includes REAL contents (X.690 clause 8.5) and the
-constructed form of the explicit [0] in an EXTERNAL, EMBEDDED PDV or CHARACTER
-STRING (clauses 8.14.3, 8.17.1, 8.18.1 and 8.24.1), but without the TC-user's
-ASN.1 a context-specific or application tag gives no type to check.
-Octet-aligned and arbitrary contents are not checked. The TC-user's encoding
-rules, such as 3GPP TS 29.002 clause 17.1.1 for MAP, are for its own codec to
-apply. A dialogue PDU is TCAP syntax in any of the three encodings. A message
-parsed with `WithTolerance` marshals with TCAP's own fields encoded afresh and
-the TC-user's bytes as received.
+well-formed BER. That covers REAL contents (X.690 clause 8.5) and the explicit
+[0] of an EXTERNAL, EMBEDDED PDV or CHARACTER STRING, which must be constructed
+and hold exactly one value (clauses 8.14.3, 8.17.1, 8.18.1 and 8.24.1). Without
+the TC-user's ASN.1, a context-specific or application tag gives no type to
+check. Octet-aligned and arbitrary contents are not checked. The TC-user's
+encoding rules, such as 3GPP TS 29.002 clause 17.1.1 for MAP, are for its own
+codec to apply. A dialogue PDU is TCAP syntax in any of the three encodings. A
+message parsed with `WithTolerance` marshals with TCAP's own fields encoded
+afresh and the TC-user's bytes as received.
 
 `OID` is a string type, so application context names can be constants.
 `ParseOID` and `Marshal` validate OIDs with go-asn1, which accepts arcs of
