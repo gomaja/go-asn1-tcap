@@ -307,13 +307,17 @@ func TestTablesCoverGoASN1(t *testing.T) {
 		{"MAPErrorCode", currentErrorCodes},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			named := pkg.Scope().Lookup(tc.name)
+			if named == nil {
+				t.Fatalf("go-asn1 has no type %s", tc.name)
+			}
 			want := make(map[int64]bool)
 			for _, c := range tc.codes {
 				want[c.oracle] = true
 			}
 			for _, name := range pkg.Scope().Names() {
 				c, ok := pkg.Scope().Lookup(name).(*types.Const)
-				if !ok || !c.Exported() || !types.Identical(c.Type(), pkg.Scope().Lookup(tc.name).Type()) {
+				if !ok || !c.Exported() || !types.Identical(c.Type(), named.Type()) {
 					continue
 				}
 				value, ok := constant.Int64Val(c.Val())

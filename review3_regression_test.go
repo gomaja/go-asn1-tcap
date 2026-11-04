@@ -327,6 +327,14 @@ func TestReview3NoInvokeIDOfPrimitiveElement(t *testing.T) {
 // it growing. The ceiling for the smaller input, about 35% over the largest
 // measurement, bounds it.
 func TestReview3SegmentedIDCost(t *testing.T) {
+	var inputs [2][]byte
+	for i := range inputs {
+		id := tlv("04", strings.Repeat("aa", (i+1)<<20))
+		for range 120 {
+			id = tlv("24", id)
+		}
+		inputs[i] = hx(tlv("62", tlv("68", id), tlv("6c", hexCodecBadInvoke)))
+	}
 	for _, tolerant := range []bool{false, true} {
 		name := "strict"
 		if tolerant {
@@ -334,13 +342,8 @@ func TestReview3SegmentedIDCost(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			var allocations [2]uint64
-			for i := range allocations {
+			for i, input := range inputs {
 				size := (i + 1) << 20
-				id := tlv("04", strings.Repeat("aa", size))
-				for range 120 {
-					id = tlv("24", id)
-				}
-				input := hx(tlv("62", tlv("68", id), tlv("6c", hexCodecBadInvoke)))
 				var opts []tcap.ParseOption
 				var log ber.ViolationLog
 				if tolerant {
