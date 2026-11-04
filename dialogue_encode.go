@@ -31,7 +31,7 @@ func encodeDialogue(d *Dialogue) (*wire.DialoguePortion, error) {
 		}
 		w, err := wire.NewDialoguePortionExternal(e)
 		if err != nil {
-			return nil, err
+			return nil, fieldError("Dialogue.Opaque", err)
 		}
 		return &w, nil
 	}

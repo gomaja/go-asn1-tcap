@@ -38,7 +38,8 @@ type ReturnResult struct {
 
 // Result is the result sequence of a Return Result: the operation code and
 // the complete BER encoding of one value, the result. Both are mandatory
-// (Q.773 Table 16 note b).
+// (Q.773 clause 3.1): Marshal reports a nil Parameter with
+// ErrMissingResultParameter.
 type Result struct {
 	OpCode    Code
 	Parameter []byte

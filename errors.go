@@ -84,6 +84,7 @@ var (
 
 	// ErrUnexpectedUserInformation reports user information in an ABRT whose
 	// abort source is the dialogue service provider (Q.774 clause 3.2.2.1).
+	// This is a sender rule: Marshal applies it, and Parse accepts such an ABRT.
 	ErrUnexpectedUserInformation = errors.New("tcap: unexpected user information")
 
 	// ErrUnsupportedProtocolVersion reports a protocol-version that does not
@@ -99,6 +100,12 @@ var (
 	// required int64 field cannot represent. Strict decoding reports the
 	// codec's *ber.ValidationError (Q.773 clause 4.2.2.2).
 	ErrMissingInvokeID = errors.New("tcap: missing invoke ID")
+
+	// ErrMissingResultParameter reports a Result whose Parameter is nil. Q.773
+	// clause 3.1 makes the parameter mandatory in the result sequence. An empty
+	// Parameter is not the encoding of a value, so the codec reports it, as
+	// ber.ErrTruncated.
+	ErrMissingResultParameter = errors.New("tcap: missing result parameter")
 
 	// ErrInvalidLinkedID reports a tolerated NULL linked ID that the model
 	// cannot represent (Q.773 Table 20). Strict decoding reports the codec
@@ -255,8 +262,9 @@ func (e *ParseError) Unwrap() error {
 	return e.Err
 }
 
-// FieldError reports the field of a message that Marshal rejected, by its
-// path from the message, such as "Components[1].Invoke.Parameter".
+// FieldError reports the field of a message that Marshal rejected, or of a
+// dialogue that Parse refused under the Q.774 rules this package applies, by
+// its path from the message, such as "Components[1].Invoke.Parameter".
 type FieldError struct {
 	Path string
 	Err  error
