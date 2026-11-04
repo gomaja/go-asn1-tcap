@@ -69,10 +69,11 @@ var (
 
 	// ErrUnexpectedDialoguePDU reports a dialogue PDU that the message type
 	// cannot carry (ITU-T Q.774 (06/97) Table 3), or a dialogue portion with
-	// the dialogue-as or uniDialogue-as direct-reference and no decoded PDU:
-	// an Opaque with either name, in Marshal, and in Parse under
-	// WithTolerance an EXTERNAL that also carries an indirect-reference,
-	// whose PDU the codec leaves undecoded (Q.773 clause 4.2.3).
+	// the dialogue-as or uniDialogue-as direct-reference and no decoded PDU.
+	// Marshal returns it for an Opaque with either name. Parse returns it
+	// under WithTolerance for an EXTERNAL that also carries an
+	// indirect-reference, whose PDU the codec leaves undecoded (Q.773 clause
+	// 4.2.3).
 	ErrUnexpectedDialoguePDU = errors.New("tcap: unexpected dialogue PDU")
 
 	// ErrUnexpectedDialogueResult reports an AARE whose result does not suit
