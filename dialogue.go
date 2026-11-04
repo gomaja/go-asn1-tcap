@@ -15,7 +15,11 @@ import (
 // under uniDialogue-as-id. Opaque is a dialogue portion in any other abstract
 // syntax: user information that the TC-user defines. Marshal rejects Opaque
 // with dialogue-as-id or uniDialogue-as-id; use the corresponding PDU field
-// so that the sender rules apply (Q.773 clause 4.2.3).
+// so that the sender rules apply (Q.773 clause 4.2.3). Parse never returns
+// an Opaque with those names either. An EXTERNAL with one of them that also
+// carries an indirect-reference is refused: in strict mode by the codec, and
+// under WithTolerance, where the codec leaves its PDU undecoded, with
+// ErrUnexpectedDialoguePDU.
 //
 // The dialogue PDUs a message may carry are those of ITU-T Q.774 (06/97)
 // Table 3, which this package applies in both Parse modes and in Marshal: an

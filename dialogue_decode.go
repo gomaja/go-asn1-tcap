@@ -81,6 +81,16 @@ func decodeDialogue(dp *wire.DialoguePortion, mt MessageType) (*Dialogue, error)
 		if err != nil {
 			return nil, err
 		}
+		// Q.773 clause 4.2.3: under the dialogue-as or uniDialogue-as
+		// direct-reference the data value shall be a dialogue PDU, and user
+		// information has a user-defined abstract syntax name. The codec
+		// does not decode the PDU of an EXTERNAL that also carries an
+		// indirect-reference, which only WithTolerance lets through. It is a
+		// malformed known syntax, not user data; encodeDialogue refuses the
+		// same Opaque.
+		if e.DirectReference == wire.DialogueAsId() || e.DirectReference == wire.UniDialogueAsId() {
+			return nil, fieldError("Dialogue", ErrUnexpectedDialoguePDU)
+		}
 		x, err := decodeExternal(e)
 		if err != nil {
 			return nil, err

@@ -92,6 +92,53 @@ func TestParseOpaqueSchemaBoundaries(t *testing.T) {
 	}
 }
 
+// A dialogue portion whose direct-reference is dialogue-as or uniDialogue-as
+// is never an Opaque. With an indirect-reference as well (Q.773 (06/97) clause
+// 4.2.3), the codec refuses it in strict mode and under tolerance does not
+// decode its PDU; Parse refuses it in both modes rather than skip the Q.774
+// Table 3 rules and return a message that Marshal refuses. Another
+// direct-reference with an indirect-reference stays Opaque under tolerance.
+func TestParseToleratedDialogueIdentification(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		opaque      bool
+	}{
+		{"Begin AARQ", "621c4801016b172815060700118605010101020101a0076005a10306012a", false},
+		{"Continue AARE accepted", "65354801014901026b2d282b060700118605010101020101a01d611b80020780a109060704000001001403a203020100a305a103020100", false},
+		{"Continue AARE reject-permanent", "65354801014901026b2d282b060700118605010101020101a01d611b80020780a109060704000001001403a203020101a305a103020102", false},
+		{"End ABRT", "641a4901026b152813060700118605010101020101a0056403800101", false},
+		{"Abort AARE accepted", "67324901026b2d282b060700118605010101020101a01d611b80020780a109060704000001001403a203020100a305a103020100", false},
+		{"Abort ABRT", "671a4901026b152813060700118605010101020101a0056403800101", false},
+		{"Unidirectional AUDT", "61236b172815060700118605010201020101a0076005a10306012a6c08a106020101020101", false},
+		{"End other abstract syntax", "64114901026b0c280a06012a020101a0020500", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := hx(tc.input)
+			_, err := tcap.Parse(data)
+			var pe *tcap.ParseError
+			var validation *ber.ValidationError
+			if !errors.As(err, &pe) || pe.Portion != tcap.PortionDialogue || !errors.As(err, &validation) {
+				t.Fatalf("strict Parse: %v", err)
+			}
+			var reports ber.ViolationLog
+			m, err := tcap.Parse(data, tcap.WithTolerance(&reports))
+			if tc.opaque {
+				end, ok := m.(*tcap.End)
+				if err != nil || !ok || end.Dialogue == nil || end.Dialogue.Opaque == nil || end.Dialogue.Opaque.DirectReference != "1.2" || len(reports.Snapshot()) != 1 {
+					t.Fatalf("tolerant Parse: %v, %v; reports %v", m, err, reports.Snapshot())
+				}
+				return
+			}
+			if m != nil || !errors.As(err, &pe) || pe.Portion != tcap.PortionDialogue || !errors.Is(err, tcap.ErrUnexpectedDialoguePDU) {
+				t.Fatalf("tolerant Parse: %v, %v", m, err)
+			}
+			if len(reports.Snapshot()) != 0 {
+				t.Fatal("failed Parse published violations")
+			}
+		})
+	}
+}
+
 func TestParseDecodeErrorPrefix(t *testing.T) {
 	for _, input := range []string{
 		"620a4801016c05a103020105",
