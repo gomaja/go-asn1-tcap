@@ -9,10 +9,10 @@ import (
 	tcap "github.com/gomaja/go-asn1-tcap"
 )
 
-// Rules of oid.go and contract 3.11: canonical dotted decimal, at least two
-// arcs, first arc 0..2, second arc at most 39 under a first arc of 0 or 1
-// (ITU-T X.690 (02/2021) clause 8.19.4), arcs within uint64, and the first
-// subidentifier X*40+Y within uint64.
+// ParseOID requires canonical dotted decimal with at least two arcs, first
+// arc 0..2, and second arc at most 39 under a first arc of 0 or 1 (ITU-T
+// X.690 (02/2021) clause 8.19.4). Arcs and OIDFromArcs expose uint64 views;
+// ParseOID also accepts wider arcs and a wider first subidentifier X*40+Y.
 
 var validOIDs = []struct {
 	s    string

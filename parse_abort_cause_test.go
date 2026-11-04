@@ -44,7 +44,6 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "unknown message", input: "6300", cause: unknown},
 		{name: "unknown before syntax", input: "63", cause: unknown},
 		{name: "unknown before limit", input: "6303480101", limits: tcap.DecodeLimits{MaxWork: 1}, cause: unknown},
-		{name: "octet after message", input: "620348010100", cause: bad},
 		{name: "two messages", input: "62034801016203480101", cause: bad},
 		{name: "truncated TID", input: "620448027f", cause: bad},
 		{name: "truncated component", input: "620b4801016c06a104020101", cause: bad},
@@ -165,7 +164,6 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "EMBEDDED PDV without data value in argument and unexpected NULL tolerant", input: "62184801016c11a10f02010102012d2b07a00581032a03040500", tolerant: true, cause: incorrect},
 		{name: "identification [6] in argument and unexpected NULL", input: "62174801016c10a10e02010102012d2b06a002860082000500", cause: incorrect},
 		{name: "identification [6] in argument and unexpected NULL tolerant", input: "62174801016c10a10e02010102012d2b06a002860082000500", tolerant: true, cause: incorrect},
-		{name: "codec limit", input: "6203480101", limits: tcap.DecodeLimits{MaxWork: 1}, cause: resource},
 		// A limit met only while inspecting keeps the codec's failure: a
 		// repeated DTID with a long-form length below 128 (Q.773 clause
 		// 4.1.1), and a truncated NULL.

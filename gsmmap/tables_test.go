@@ -4,6 +4,13 @@ package gsmmap_test
 // constant with the go-asn1 constant of the same value.
 
 import (
+	"go/constant"
+	"go/importer"
+	"go/token"
+	"go/types"
+	"strings"
+	"testing"
+
 	"github.com/gomaja/go-asn1-tcap"
 	"github.com/gomaja/go-asn1-tcap/gsmmap"
 	"github.com/gomaja/go-asn1/telecom/ss7/gsm_map"
@@ -113,10 +120,8 @@ var reservedContexts = []struct {
 	{"GprsLocationInfoRetrievalContextV3", gsmmap.GprsLocationInfoRetrievalContextV3, "0.4.0.0.1.0.33.3"},
 }
 
-// operationCodes uses the current go-asn1 information-object catalogue.
-// Literal historical reservations are from TS 29.002 V19.1.0 clause 17.5;
-// checked against the d77484b generated MAP-Protocol assignments.
-var operationCodes = []codeCase{
+// currentOperationCodes uses the current go-asn1 information-object catalogue.
+var currentOperationCodes = []codeCase{
 	{"OpCodeUpdateLocation", gsmmap.OpCodeUpdateLocation, int64(gsm_map.UpdateLocation)},
 	{"OpCodeCancelLocation", gsmmap.OpCodeCancelLocation, int64(gsm_map.CancelLocation)},
 	{"OpCodeProvideRoamingNumber", gsmmap.OpCodeProvideRoamingNumber, int64(gsm_map.ProvideRoamingNumber)},
@@ -187,6 +192,11 @@ var operationCodes = []codeCase{
 	{"OpCodeISTAlert", gsmmap.OpCodeISTAlert, int64(gsm_map.IstAlert)},
 	{"OpCodeISTCommand", gsmmap.OpCodeISTCommand, int64(gsm_map.IstCommand)},
 	{"OpCodeNoteMMEvent", gsmmap.OpCodeNoteMMEvent, int64(gsm_map.NoteMMEvent)},
+}
+
+// Historical reservations are from TS 29.002 V19.1.0 clause 17.5;
+// checked against the d77484b generated MAP-Protocol assignments.
+var reservedOperationCodes = []codeCase{
 	{"OpCodeSendParameters", gsmmap.OpCodeSendParameters, 9},
 	{"OpCodeProcessUnstructuredSSData", gsmmap.OpCodeProcessUnstructuredSSData, 19},
 	{"OpCodePerformHandover", gsmmap.OpCodePerformHandover, 28},
@@ -200,8 +210,8 @@ var operationCodes = []codeCase{
 	{"OpCodeBeginSubscriberActivity", gsmmap.OpCodeBeginSubscriberActivity, 54},
 }
 
-// errorCodes uses the same catalogue and historical reservations as operationCodes.
-var errorCodes = []codeCase{
+// currentErrorCodes uses the same catalogue as currentOperationCodes.
+var currentErrorCodes = []codeCase{
 	{"ErrorCodeUnknownSubscriber", gsmmap.ErrorCodeUnknownSubscriber, int64(gsm_map.UnknownSubscriber)},
 	{"ErrorCodeUnknownMSC", gsmmap.ErrorCodeUnknownMSC, int64(gsm_map.UnknownMSC)},
 	{"ErrorCodeUnidentifiedSubscriber", gsmmap.ErrorCodeUnidentifiedSubscriber, int64(gsm_map.UnidentifiedSubscriber)},
@@ -258,6 +268,9 @@ var errorCodes = []codeCase{
 	{"ErrorCodeInformationNotAvailable", gsmmap.ErrorCodeInformationNotAvailable, int64(gsm_map.InformationNotAvailable)},
 	{"ErrorCodeUnknownAlphabet", gsmmap.ErrorCodeUnknownAlphabet, int64(gsm_map.UnknownAlphabet)},
 	{"ErrorCodeUSSDBusy", gsmmap.ErrorCodeUSSDBusy, int64(gsm_map.UssdBusy)},
+}
+
+var reservedErrorCodes = []codeCase{
 	{"ErrorCodeUnknownBaseStation", gsmmap.ErrorCodeUnknownBaseStation, 2},
 	{"ErrorCodeInvalidTargetBaseStation", gsmmap.ErrorCodeInvalidTargetBaseStation, 23},
 	{"ErrorCodeNoRadioResourceAvailable", gsmmap.ErrorCodeNoRadioResourceAvailable, 24},
@@ -273,4 +286,69 @@ var equivalentContexts = []struct {
 	want  tcap.OID
 }{
 	{"ShortMsgMORelayContextV2", gsmmap.ShortMsgMORelayContextV2, "0.4.0.0.1.0.21.2"}, // clause 17.3.2.22
+}
+
+var operationCodes = append(append([]codeCase(nil), currentOperationCodes...), reservedOperationCodes...)
+var errorCodes = append(append([]codeCase(nil), currentErrorCodes...), reservedErrorCodes...)
+
+// TestTablesCoverGoASN1 checks both directions; reservations are not part of
+// go-asn1's current MAP catalogue. Source importing follows module replacements
+// without depending on the module cache's directory layout or export data.
+func TestTablesCoverGoASN1(t *testing.T) {
+	pkg, err := importer.ForCompiler(token.NewFileSet(), "source", nil).Import("github.com/gomaja/go-asn1/telecom/ss7/gsm_map")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		codes []codeCase
+	}{
+		{"MAPOperationCode", currentOperationCodes},
+		{"MAPErrorCode", currentErrorCodes},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			want := make(map[int64]bool)
+			for _, c := range tc.codes {
+				want[c.oracle] = true
+			}
+			for _, name := range pkg.Scope().Names() {
+				c, ok := pkg.Scope().Lookup(name).(*types.Const)
+				if !ok || !c.Exported() || !types.Identical(c.Type(), pkg.Scope().Lookup(tc.name).Type()) {
+					continue
+				}
+				value, ok := constant.Int64Val(c.Val())
+				if !ok || !want[value] {
+					t.Errorf("go-asn1 %s = %s has no current table entry", name, c.Val())
+				}
+				delete(want, value)
+			}
+			for value := range want {
+				t.Errorf("current table code %d has no go-asn1 %s", value, tc.name)
+			}
+		})
+	}
+	t.Run("contexts", func(t *testing.T) {
+		want := make(map[string]bool)
+		for _, c := range currentContexts {
+			want[strings.ToLower(c.name)] = true
+		}
+		for _, name := range pkg.Scope().Names() {
+			fn, ok := pkg.Scope().Lookup(name).(*types.Func)
+			if !ok || !fn.Exported() || !strings.Contains(name, "Context") {
+				continue
+			}
+			sig := fn.Type().(*types.Signature)
+			if sig.Params().Len() != 0 || sig.Results().Len() != 1 || sig.Results().At(0).Type().String() != "github.com/gomaja/go-asn1/telecom/ss7/gsm_map/runtime.ObjectIdentifier" {
+				continue
+			}
+			key := strings.ToLower(name) // Local names capitalize SS and MM.
+			if !want[key] {
+				t.Errorf("go-asn1 context %s has no current table entry", name)
+			}
+			delete(want, key)
+		}
+		for name := range want {
+			t.Errorf("current context %s has no go-asn1 function", name)
+		}
+	})
 }

@@ -91,7 +91,7 @@ func TestParseRemarshalsReceivedUnusedBits(t *testing.T) {
 		if err != nil {
 			t.Fatalf("received BIT STRING round trip: %v", err)
 		}
-		assertSameMessage(t, m, back)
+		assertExactMessage(t, m, back)
 		if !bytes.Equal(data, before) {
 			t.Fatal("input changed")
 		}

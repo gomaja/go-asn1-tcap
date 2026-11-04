@@ -70,8 +70,8 @@ func TestParseAcceptsGenericBER(t *testing.T) {
 		// X.690 (02/2021) clause 8.6.3: constructed BIT STRING.
 		{"constructed protocol-version", "62394804010203046b20281e060700118605010101a0136011a00403020780a1090607040000010014036c0fa10d02010102012d30050403010203", aarq},
 		{"dialogue elements indefinite", "62414804010203046b802880060700118605010101a080608080020780a180060704000001001403000000000000000000006c0fa10d02010102012d30050403010203", aarq},
-		// Contract 4.2: the data value of a known PDU may be octet-aligned
-		// or arbitrary with whole octets; Marshal uses single-ASN1-type.
+		// Parse accepts a known PDU as octet-aligned or arbitrary with
+		// whole octets; Marshal uses single-ASN1-type (Dialogue in dialogue.go).
 		{"AARQ as octet-aligned", "62374804010203046b1e281c0607001186050101018111600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203", aarq},
 		{"AARQ as arbitrary", "62384804010203046b1f281d060700118605010101821200600f80020780a1090607040000010014036c0fa10d02010102012d30050403010203", aarq},
 		{"user information lengths long form and indefinite",
@@ -132,7 +132,7 @@ func TestParseParameterVerbatim(t *testing.T) {
 			if err != nil || len(reports.Snapshot()) != 0 {
 				t.Fatalf("strict Parse: %v; reports %v", err, reports.Snapshot())
 			}
-			assertSameMessage(t, msg, strict)
+			assertExactMessage(t, msg, strict)
 			b, ok := msg.(*tcap.Begin)
 			if !ok || len(b.Components) != 1 || b.Components[0].Invoke == nil {
 				t.Fatalf("parsed %s", jsonText(normalize(msg)))
@@ -148,7 +148,7 @@ func TestParseParameterVerbatim(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			assertSameMessage(t, msg, again)
+			assertExactMessage(t, msg, again)
 		})
 	}
 }
@@ -227,7 +227,7 @@ func TestParseOpaqueDialogue(t *testing.T) {
 
 // TestParseKnownDialogueErrors: a known abstract syntax whose data value is
 // not a PDU of that syntax, or is not whole octets, is an error in the
-// dialogue portion, with no fallback to Opaque (contract 4.2).
+// dialogue portion, with no fallback to Opaque (Dialogue in dialogue.go).
 func TestParseKnownDialogueErrors(t *testing.T) {
 	cases := []struct{ name, input string }{
 		// 04 01 00 is no DialoguePDU (Q.773 clause 3.2.1).
@@ -245,8 +245,8 @@ func TestParseKnownDialogueErrors(t *testing.T) {
 	}
 }
 
-// TestParseDialoguePlacement is ITU-T Q.774 (06/97) Table 3 on receipt
-// (contract 4.2): every dialogue PDU in every message type.
+// TestParseDialoguePlacement checks Dialogue placement (dialogue.go) on
+// receipt: every dialogue PDU in every message type.
 func TestParseDialoguePlacement(t *testing.T) {
 	pdus := []struct{ name, dp string }{
 		{"AARQ", dialoguePortion(hexDialogueAS, hexAARQ)},
@@ -300,7 +300,7 @@ func TestParseDialoguePlacement(t *testing.T) {
 
 // TestParseProtocolVersion: the protocol-version of an AARQ or an AUDT is
 // kept exactly, the stack answers it (Q.774 clause 3.2.3); an AARE carries
-// exactly version1 (contract 4.2).
+// exactly version1 (Dialogue in dialogue.go).
 func TestParseProtocolVersion(t *testing.T) {
 	requests := []struct {
 		name, input string
@@ -368,8 +368,8 @@ func TestParseProtocolVersion(t *testing.T) {
 			})
 		})
 	}
-	// Marshal emits this AARE (contract 3.9 allows trailing zero bits), so
-	// Parse accepts it back.
+	// Marshal allows trailing zero bits in AARE.ProtocolVersion (dialogue.go),
+	// so Parse accepts this AARE back.
 	t.Run("AARE version1 with trailing zero bits", func(t *testing.T) {
 		const input = "65384804010203044904050607086b2a2828060700118605010101a01d611b80020080a109060704000001001403a203020100a305a103020100"
 		msg := mustParse(t, input)
@@ -385,7 +385,7 @@ func TestParseProtocolVersion(t *testing.T) {
 }
 
 // TestParseUserInformation: user information keeps order, absent versus
-// present-empty, and every EXTERNAL field (contract 4.2 and 4.3).
+// present-empty, and every EXTERNAL field (AARQ and External in dialogue.go).
 func TestParseUserInformation(t *testing.T) {
 	t.Run("absent", func(t *testing.T) {
 		d := messageDialogue(mustParse(t, corpusHex(t, "begin-aarq-invoke")))
@@ -474,7 +474,8 @@ func TestParseSingleASN1TypeNestedElement(t *testing.T) {
 	}
 }
 
-// TestParseReceiverComponentRules covers the component rules of contract 4.2.
+// TestParseReceiverComponentRules checks required IDs, representable codes
+// and the component-portion size constraint.
 func TestParseReceiverComponentRules(t *testing.T) {
 	cases := []struct {
 		name, input string
@@ -537,7 +538,7 @@ func TestParseDecodeLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	assertSameMessage(t, msg, mustParse(t, corpusHex(t, "begin-aarq-map-open")))
+	assertExactMessage(t, msg, mustParse(t, corpusHex(t, "begin-aarq-map-open")))
 	if _, err := tcap.Parse(hx(corpusHex(t, "begin-aarq-map-open")), tcap.WithDecodeLimits(ber.DefaultDecodeLimits())); err != nil {
 		t.Errorf("Parse with default limits: %v", err)
 	}
@@ -587,7 +588,7 @@ func TestParseDoesNotAlias(t *testing.T) {
 }
 
 // TestMarshalDoesNotAliasOrMutate: "The result never aliases the message"
-// (message.go) and Marshal never mutates the message (contract section 3).
+// (message.go) and Marshal never mutates the message.
 func TestMarshalDoesNotAliasOrMutate(t *testing.T) {
 	build := func() []tcap.Message {
 		return []tcap.Message{

@@ -506,7 +506,19 @@ func jsonText(v any) string {
 	return string(data)
 }
 
-// assertSameMessage fails unless a and b normalize to the same structure.
+// assertExactMessage keeps protocol-version presence when comparing API
+// round trips, including an explicitly encoded DEFAULT {version1}.
+func assertExactMessage(t testing.TB, a, b tcap.Message) {
+	t.Helper()
+	na, nb := normalize(a), normalize(b)
+	if !reflect.DeepEqual(canonicalJSON(t, na), canonicalJSON(t, nb)) {
+		t.Errorf("messages differ:\n  %s\n  %s", jsonText(na), jsonText(nb))
+	}
+}
+
+// assertSameMessage compares canonical counterparts semantically: an absent
+// protocol-version and explicit {version1} have the same default value
+// (Q.773 (06/97) clause 3.2.1). API round trips use assertExactMessage.
 func assertSameMessage(t testing.TB, a, b tcap.Message) {
 	t.Helper()
 	na, nb := normalize(a), normalize(b)
@@ -620,7 +632,7 @@ func hasIndefiniteLength(data []byte) (bool, error) {
 }
 
 // ---------------------------------------------------------------------------
-// Expected parse failures, contract section 6.
+// Expected parse failures.
 // ---------------------------------------------------------------------------
 
 const unchecked = "?"
@@ -728,8 +740,7 @@ var (
 	idxMinus = ptr(-1)
 )
 
-// corpusFailures lists, by vector id, the outcome contract section 6
-// specifies for every vector that Parse rejects.
+// corpusFailures lists the expected ParseError fields for each rejected vector.
 var corpusFailures = map[string]parseErrWant{
 	// Q.773 Table 20 defines only the [0] Linked ID tag.
 	"begin-linked-absent": {
@@ -872,8 +883,8 @@ func TestCorpusValidVectors(t *testing.T) {
 				t.Fatalf("Marshal: %v", err)
 			}
 			if canon, ok := indefiniteCounterparts[v.ID]; ok {
-				// Contract section 6: same value as the canonical
-				// counterpart, Marshal emits definite lengths.
+				// Same value as the canonical counterpart; Marshal
+				// emits definite lengths.
 				if indef, err := hasIndefiniteLength(out); err != nil || indef {
 					t.Errorf("Marshal output %x: indefinite=%v err=%v", out, indef, err)
 				}
@@ -884,7 +895,7 @@ func TestCorpusValidVectors(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Parse(Marshal): %v", err)
 				}
-				assertSameMessage(t, msg, again)
+				assertExactMessage(t, msg, again)
 				return
 			}
 			if hex.EncodeToString(out) != corpusHex(t, v.ID) {
@@ -897,7 +908,7 @@ func TestCorpusValidVectors(t *testing.T) {
 // checkAbsentPortions checks that what the corpus vectors leave out is nil:
 // no valid message has a present but empty component portion (SIZE (1..MAX)),
 // and no corpus vector carries a present but empty user-information field,
-// so an empty slice there must be a nil one (contract 4.3).
+// so an empty slice there must be nil (Message and AARQ in message.go and dialogue.go).
 func checkAbsentPortions(t *testing.T, msg tcap.Message) {
 	t.Helper()
 	var comps []tcap.Component
@@ -952,9 +963,8 @@ func TestCorpusExpectedFailures(t *testing.T) {
 	}
 }
 
-// TestCorpusTolerance covers WithTolerance (parse.go) and
-// contract section 6: values outside their ASN.1 constraints parse, each
-// violation is recorded, and Marshal stays strict.
+// TestCorpusTolerance checks WithTolerance (parse.go): values outside their
+// ASN.1 constraints parse, each violation is recorded, and Marshal stays strict.
 func TestCorpusTolerance(t *testing.T) {
 	cases := []struct {
 		id         string
@@ -1006,34 +1016,31 @@ func TestCorpusTolerance(t *testing.T) {
 		})
 	}
 
-	// Contract section 6 leaves open whether the codec tolerates SIZE 0;
-	// either outcome must be consistent.
+	// WithTolerance accepts an empty OTID with one SIZE violation; Marshal
+	// still requires 1..4 octets (Q.773 (06/97) clause 3.1, OrigTransactionID).
 	t.Run("negative-otid-0", func(t *testing.T) {
+		data := hx(corpusHex(t, "negative-otid-0"))
+		msg, err := tcap.Parse(data)
+		var ce *ber.ValidationError
+		if msg != nil || !errors.As(err, &ce) {
+			t.Fatalf("strict Parse = %v, %v; want a constraint refusal", msg, err)
+		}
 		var log ber.ViolationLog
-		msg, err := tcap.Parse(hx(corpusHex(t, "negative-otid-0")), tcap.WithTolerance(&log))
+		msg, err = tcap.Parse(data, tcap.WithTolerance(&log))
 		if err != nil {
-			if _, ok := err.(*tcap.ParseError); !ok {
-				t.Fatalf("error %T is not *tcap.ParseError", err)
-			}
-			if n := len(log.Snapshot()); n != 0 {
-				t.Errorf("failed Parse recorded %d violations", n)
-			}
-			t.Logf("SIZE 0 not tolerated: %v", err)
-			return
+			t.Fatalf("Parse with tolerance: %v", err)
 		}
 		b, ok := msg.(*tcap.Begin)
 		if !ok || len(b.OTID) != 0 {
-			t.Errorf("got %s, want Begin with empty OTID", jsonText(normalize(msg)))
+			t.Fatalf("got %s, want Begin with empty OTID", jsonText(normalize(msg)))
 		}
-		if len(log.Snapshot()) == 0 {
-			t.Error("no violation recorded")
+		if n := len(log.Snapshot()); n != 1 {
+			t.Errorf("recorded %d violations, want 1", n)
 		}
 		_, err = msg.Marshal()
-		var ce *ber.ValidationError
 		if !errors.As(err, &ce) {
 			t.Errorf("Marshal error = %v, want *ber.ValidationError", err)
 		}
-		t.Logf("SIZE 0 tolerated, %d violation(s)", len(log.Snapshot()))
 	})
 
 	// An OTID of 5 octets and an invoke ID of 128: both violations are

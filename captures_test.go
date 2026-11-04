@@ -88,7 +88,7 @@ func TestCaptures(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Parse(Marshal): %v", err)
 				}
-				assertSameMessage(t, msg, again)
+				assertExactMessage(t, msg, again)
 				return
 			}
 			want := c.Hex
@@ -304,7 +304,7 @@ func TestCaptureFields(t *testing.T) {
 	})
 
 	t.Run("Continue otid dtid long message", func(t *testing.T) {
-		// No component portion: Components is nil (contract 4.3).
+		// No component portion: Continue.Components is nil (message.go).
 		c, ok := parseCapture(t, "Continue otid dtid long message").(*tcap.Continue)
 		if !ok {
 			t.Fatal("not a Continue")

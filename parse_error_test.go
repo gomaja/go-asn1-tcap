@@ -59,7 +59,7 @@ func TestParseErrorComponentContext(t *testing.T) {
 	})
 
 	// The second invoke ID is 128 (02 02 00 80), outside -128..127, so it is
-	// not derivable (contract 4.5).
+	// not derivable under ParseError.InvokeID (errors.go).
 	t.Run("second invoke ID out of range", func(t *testing.T) {
 		input := "65524804010203044904050607086b2a2828060700118605010101a01d611b80020780a109060704000001001403a203020100a305a1030201006c18a10d02010102012d30050403010203a1070202008002012d"
 		_, err := tcap.Parse(hx(input))
@@ -90,7 +90,7 @@ func TestParseErrorComponentContext(t *testing.T) {
 
 // TestParseErrorUnrecognizedComponent: a component tag outside Q.773 Table 19
 // ([1], [2], [3], [4], [7], constructed context-specific) is reported with
-// ErrUnrecognizedComponent at its index (contract 4.5).
+// ErrUnrecognizedComponent at its ParseError.ComponentIndex.
 func TestParseErrorUnrecognizedComponent(t *testing.T) {
 	cases := []struct {
 		name, input string
@@ -116,7 +116,7 @@ func TestParseErrorUnrecognizedComponent(t *testing.T) {
 
 // TestParseErrorUnrecognizedMessageType: a message tag outside Q.773 Table 8;
 // the transaction IDs are still derived when the TLV is well-formed (ITU-T
-// Q.774 (06/97) Table 7, row UNKNOWN; contract 4.5).
+// Q.774 (06/97) Table 7, row UNKNOWN; ParseError in errors.go).
 func TestParseErrorUnrecognizedMessageType(t *testing.T) {
 	cases := []struct{ name, input, otid, dtid string }{
 		{"[APPLICATION 6] with OTID and DTID", "661d4804010203044904050607086c0fa10d02010102012d30050403010203", "01020304", "05060708"},
@@ -136,7 +136,7 @@ func TestParseErrorUnrecognizedMessageType(t *testing.T) {
 }
 
 // TestParseErrorTransactionPortion: failures that no single portion explains
-// are in the transaction portion (contract 4.5).
+// are in the transaction portion (ParseError.Portion in errors.go).
 func TestParseErrorTransactionPortion(t *testing.T) {
 	cases := []struct {
 		name, input string
@@ -248,5 +248,22 @@ func TestParseErrorTruncatedComponentPortion(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// End-of-contents is not an element in definite contents (X.690 (02/2021)
+// clause 8.1.5). It remains a BER tag error, not an unrecognized component.
+func TestParseErrorStandaloneEndOfContents(t *testing.T) {
+	for _, tolerant := range []bool{false, true} {
+		var log tcap.ViolationLog
+		var opts []tcap.ParseOption
+		if tolerant {
+			opts = append(opts, tcap.WithTolerance(&log))
+		}
+		msg, err := tcap.Parse(hx("620f4801016c0aa1060201010201010000"), opts...)
+		var pe *tcap.ParseError
+		if msg != nil || !errors.As(err, &pe) || pe.Portion != tcap.PortionComponent || pe.ComponentIndex != 1 || pe.ComponentType != "" || !errors.Is(err, ber.ErrInvalidTag) || errors.Is(err, tcap.ErrUnrecognizedComponent) {
+			t.Fatalf("tolerant %t: Parse = %v, %v", tolerant, msg, err)
+		}
 	}
 }

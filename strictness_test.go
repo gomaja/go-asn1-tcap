@@ -55,7 +55,7 @@ func TestParseProfileAndRawContents(t *testing.T) {
 					t.Fatalf("expected ProtocolRule: %v", reports.Snapshot())
 				}
 			} else {
-				assertSameMessage(t, m, strict)
+				assertExactMessage(t, m, strict)
 			}
 			want := data
 			if tc.canonical != "" {
@@ -69,7 +69,7 @@ func TestParseProfileAndRawContents(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			assertSameMessage(t, m, back)
+			assertExactMessage(t, m, back)
 		})
 	}
 }
