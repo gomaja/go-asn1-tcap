@@ -10,8 +10,9 @@ import (
 // reported as *ber.ValidationError instead. BER structure errors retain the
 // codec's causes, including parameter and EXTERNAL single-ASN1-type errors.
 // The codec checks the ASN.1 of Q.773 Annex A and X.880, the encoding rules
-// of X.680 and X.690, and Q.773 clauses 4.1.1 (in TCAP's own syntax),
-// 4.2.2.2 and 4.2.3; it reports a validly encoded element that the ASN.1
+// of X.680 and X.690 (in the TC-user's values, only those the package doc
+// describes), and Q.773 clauses 4.1.1 (in TCAP's own syntax), 4.2.2.2 and
+// 4.2.3; it reports a validly encoded element that the ASN.1
 // does not admit, and a missing mandatory component, with
 // ber.ErrUnexpectedElement. The sentinels below report the rules this
 // package applies itself: the Q.774 procedure rules and the limits of its Go
@@ -173,7 +174,8 @@ type ParseError struct {
 	// Portion is the portion of the message that failed. A Q.773 clause 4.1.1
 	// fault in the header of the dialogue portion is in PortionDialogue, since
 	// that portion is decoded on its own. One in the header of the component
-	// portion is in PortionTransaction, since no component is at fault.
+	// portion is in PortionTransaction, since no component is at fault. A
+	// length that runs past the message is in PortionTransaction for both.
 	Portion Portion
 
 	// ComponentIndex is the position of the failing component within the

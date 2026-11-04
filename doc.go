@@ -33,10 +33,11 @@
 // # Strictness
 //
 // The go-asn1 codec checks the ASN.1 of Q.773 Annex A and X.880, the encoding
-// rules of X.680 and X.690, and Q.773 clauses 4.1.1, 4.2.2.2 and 4.2.3.
-// This package checks dialogue placement and results (ITU-T Q.774 (06/97)
-// Table 3), dialogue versions (clause 3.2.3), Table 7 transaction-ID
-// derivability and whether values fit its Go model.
+// rules of X.680 and X.690 (in the TC-user's values, only those described
+// below), and Q.773 clauses 4.1.1, 4.2.2.2 and 4.2.3. This package checks
+// dialogue placement and results (ITU-T Q.774 (06/97) Table 3), dialogue
+// versions (clause 3.2.3), Table 7 transaction-ID derivability and whether
+// values fit its Go model.
 //
 // Marshal applies the sender rules. It encodes TCAP's own fields with
 // definite lengths, in the short form below 128 octets and otherwise in the
