@@ -176,13 +176,17 @@ func encodeComponents(cs []Component) (*wire.ComponentPortion, error) {
 	return out, nil
 }
 
-// Q.773 Table 16 note b makes both fields mandatory when result is present.
+// Q.773 clause 3.1 makes both fields mandatory when result is present; Table
+// 16 note b says why the operation code is needed.
 func encodeResult(v *ReturnResult, path string) (wire.ReturnResult, error) {
 	w := wire.ReturnResult{InvokeId: wire.NewInvokeIdPresentInt64(v.InvokeID)}
 	if v.Result != nil {
 		code, err := encodeCode(v.Result.OpCode, path+".Result.OpCode")
 		if err != nil {
 			return w, err
+		}
+		if v.Result.Parameter == nil {
+			return w, fieldError(path+".Result.Parameter", ErrMissingResultParameter)
 		}
 		w.Result = &wire.ReturnResultResult{Opcode: code, Result: runtime.RawValue{Bytes: slices.Clone(v.Result.Parameter)}}
 	}

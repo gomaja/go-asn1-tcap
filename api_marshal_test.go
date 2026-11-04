@@ -401,10 +401,10 @@ func TestMarshalParameters(t *testing.T) {
 		{name: "return error nil", msg: re(nil), want: corpusHex(t, "end-error-local-no-parameter")},
 		{name: "return error empty", msg: re([]byte{}), is: ber.ErrTruncated},
 		{name: "return error two values", msg: re(hx("05000500")), is: ber.ErrExtraData},
-		{name: "result nil", msg: rr(nil), is: ber.ErrTruncated},
+		{name: "result nil", msg: rr(nil), is: tcap.ErrMissingResultParameter, path: "Components[0].ReturnResultLast.Result.Parameter"},
 		{name: "result empty", msg: rr([]byte{}), is: ber.ErrTruncated},
 		{name: "result trailing octet", msg: rr(hx("30040402aabbff")), is: ber.ErrExtraData},
-		{name: "result not last nil", msg: &tcap.Continue{OTID: tidO, DTID: tidD, Components: []tcap.Component{{ReturnResultNotLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(45)}}}}}, is: ber.ErrTruncated},
+		{name: "result not last nil", msg: &tcap.Continue{OTID: tidO, DTID: tidD, Components: []tcap.Component{{ReturnResultNotLast: &tcap.ReturnResult{InvokeID: 1, Result: &tcap.Result{OpCode: tcap.LocalCode(45)}}}}}, is: tcap.ErrMissingResultParameter, path: "Components[0].ReturnResultNotLast.Result.Parameter"},
 	})
 }
 
@@ -578,7 +578,7 @@ func TestMarshalExternal(t *testing.T) {
 		}), constraint: true},
 		{name: "indirect reference only", msg: &tcap.Abort{DTID: tidD, Dialogue: &tcap.Dialogue{Opaque: &tcap.External{
 			IndirectReference: big.NewInt(7), Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("0500"),
-		}}}, constraint: true},
+		}}}, constraint: true, path: "Dialogue.Opaque"},
 		{name: "single-ASN1-type verbatim", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("3081020500")}),
 			want: "64164904050607086b0e280c06032a0304a0053081020500"},
 		{name: "user information two elements", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("0102")}),
@@ -604,7 +604,7 @@ func TestMarshalExternal(t *testing.T) {
 		// X.690 (02/2021) clause 8.18.4 Table 2: an EXTERNAL needs a direct
 		// or an indirect reference; go-asn1 reports ber.ErrInvalidValue
 		// (runtime/ber/external.go, encodeExternal).
-		{name: "no reference", msg: opaque(tcap.External{Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: ber.ErrInvalidValue},
+		{name: "no reference", msg: opaque(tcap.External{Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: ber.ErrInvalidValue, path: "Dialogue.Opaque"},
 		{name: "user information no reference", msg: userInfo(tcap.External{Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("01")}), is: ber.ErrInvalidValue},
 	})
 }

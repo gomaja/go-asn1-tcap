@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"math/big"
 	"reflect"
 	"testing"
 
+	wire "github.com/gomaja/go-asn1/telecom/ss7/tcap"
 	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime"
 	"github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber"
 
@@ -734,5 +736,38 @@ func TestParseClearsUnusedBits(t *testing.T) {
 	}
 	if want := "64134904303030306b0b2809060330303082020430"; hex.EncodeToString(out) != want {
 		t.Fatalf("Marshal %x, want %s", out, want)
+	}
+}
+
+// ITU-T X.690 (02/2021) clause 8.19 sets no limit on an arc, so the codec
+// accepts this OID. Its conversion to decimal text is limited locally, and the
+// OID type holds text, so Parse reports that limit.
+func TestParseOIDTextLimit(t *testing.T) {
+	arc := new(big.Int).Exp(big.NewInt(10), big.NewInt(1100), nil)
+	base := big.NewInt(128)
+	contents := []byte{}
+	for continued := byte(0); arc.Sign() > 0; continued = 0x80 {
+		rem := new(big.Int)
+		arc.QuoRem(arc, base, rem)
+		contents = append([]byte{byte(rem.Int64()) | continued}, contents...)
+	}
+	global := tlv("06", "2a", hex.EncodeToString(contents))
+	data := hx(tlv("62", "480101", tlv("6c", tlv("a1", "020101", global))))
+	var w wire.TCMessage
+	if err := w.UnmarshalBER(data); err != nil {
+		t.Fatalf("codec refused a valid OID: %v", err)
+	}
+	for _, tolerant := range []bool{false, true} {
+		var opts []tcap.ParseOption
+		var log tcap.ViolationLog
+		if tolerant {
+			opts = append(opts, tcap.WithTolerance(&log))
+		}
+		m, err := tcap.Parse(data, opts...)
+		var pe *tcap.ParseError
+		if m != nil || !errors.As(err, &pe) || !errors.Is(err, runtime.ErrOIDTextLimit) ||
+			pe.Portion != tcap.PortionComponent || pe.ComponentIndex != 0 {
+			t.Fatalf("Parse tolerant=%t = %v, %v", tolerant, m, err)
+		}
 	}
 }

@@ -65,7 +65,7 @@ func TestInternalSenderSentinels(t *testing.T) {
 		{"external-single", &End{DTID: TransactionID{1}, Dialogue: &Dialogue{Opaque: &badSingle}}, ber.ErrExtraData, ""},
 		{"parameter-empty", internalBegin(Component{Invoke: &Invoke{OpCode: LocalCode(1), Parameter: []byte{}}}), ber.ErrTruncated, ""},
 		{"parameter-trailing", internalBegin(Component{ReturnError: &ReturnError{ErrorCode: LocalCode(1), Parameter: []byte{5, 0, 5, 0}}}), ber.ErrExtraData, ""},
-		{"result-missing-parameter", internalBegin(Component{ReturnResultNotLast: &ReturnResult{Result: &Result{OpCode: LocalCode(1)}}}), ber.ErrTruncated, ""},
+		{"result-missing-parameter", internalBegin(Component{ReturnResultNotLast: &ReturnResult{Result: &Result{OpCode: LocalCode(1)}}}), ErrMissingResultParameter, "Components[0].ReturnResultNotLast.Result.Parameter"},
 		{"application-context", internalWithDialogue(&Dialogue{Request: &AARQ{ApplicationContextName: "01.2"}}), ErrInvalidOID, "Dialogue.Request.ApplicationContextName"},
 	}
 	for _, test := range tests {

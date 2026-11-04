@@ -10,7 +10,10 @@ import (
 // OID is an OBJECT IDENTIFIER in canonical dotted-decimal form, for example
 // "0.4.0.0.1.0.20.3". OIDs compare with == and can be constants. Conversion
 // with OID(s) does not validate s; Marshal validates every OID it encodes.
-// Arcs have no fixed width (ITU-T X.690 (02/2021) clause 8.19).
+// Arcs have no fixed width (ITU-T X.690 (02/2021) clause 8.19). go-asn1 limits
+// only their conversion to and from decimal text, a local resource limit: Parse
+// returns runtime.ErrOIDTextLimit for a valid encoded OID beyond it, and so do
+// Marshal and the functions below for such text.
 type OID string
 
 // ParseOID returns s as an OID after validation by runtime.ParseObjectIdentifier.

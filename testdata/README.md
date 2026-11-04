@@ -35,4 +35,7 @@ decodes without a diagnostic. The other two are valid:
 
 Some vectors use forms that a canonical encoder does not produce (indefinite
 lengths, a non-minimal length). They must parse to the same values as their
-canonical counterparts; `Marshal` then emits the canonical form.
+canonical counterparts. `Marshal` then emits TCAP's own fields in the canonical
+form and keeps the bytes of a TC-user parameter as received: the non-minimal
+length of `begin-nonminimal-long-length` is inside its Invoke parameter, so it
+stays.

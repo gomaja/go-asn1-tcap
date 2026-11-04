@@ -242,8 +242,10 @@ The codec's errors are go-asn1's types and sentinels. To match them with
 - The rules this package checks itself have an `Err` sentinel (`errors.Is`),
   for example `tcap.ErrUnrecognizedComponent` or
   `tcap.ErrUnexpectedDialoguePDU`.
-- `Marshal` reports rules checked here in a `*tcap.FieldError`. Codec errors
-  retain their generated ASN.1 paths and causes, including `*ber.ValidationError`.
+- `Marshal`, and `Parse` for the dialogue rules of Q.774, report rules checked
+  here in a `*tcap.FieldError`. Codec errors retain their generated ASN.1 paths
+  and causes, including `*ber.ValidationError`. `Marshal` also names the field
+  of an `Opaque` the codec refuses, with the codec's error as its cause.
 - When the codec cannot decode a message, its error is a `*wire.DecodeError`
   with an ASN.1 path, the transaction IDs accepted under the active options,
   and the cause. `errors.As` reaches it through `*tcap.ParseError`, unless `Parse`
@@ -323,27 +325,26 @@ information and Opaque EXTERNALs are the TC-user's syntax (ITU-T X.690
 (02/2021) clauses 8.15 and 8.18), which Q.773 clause 4.1.1 does not cover.
 Parameters and single-ASN1-type contents keep the BER bytes they were given
 or received; `Parse` in either mode and `Marshal` check only that they are
-well-formed BER. That covers REAL contents (X.690 clause 8.5) and the
-components of an EXTERNAL, EMBEDDED PDV or CHARACTER STRING (clauses 8.17.1,
-8.18.1 and 8.24.1): their order and number, the contents of their base types
-(clause 8.14.4), the direct or indirect reference that an EXTERNAL's
-identification requires (clause 8.18.4, Table 2), and the explicit [0], which
-must be constructed and hold exactly one value (clause 8.14.3). Without the
-TC-user's ASN.1, any other context-specific or application tag gives no type to
-check. Octet-aligned and arbitrary contents are checked only as OCTET STRING
-and BIT STRING encodings (clauses 8.7 and 8.6): the initial octet of a BIT
-STRING and the segments of a constructed value, not the octets or bits they
-carry. The TC-user's encoding rules, such as 3GPP TS 29.002 clause 17.1.1 for
-MAP, are for its own codec to apply. A dialogue PDU is TCAP syntax in any of
-the three encodings. `Marshal` encodes a message parsed with `WithTolerance`
-with TCAP's own fields afresh and parameters and single-ASN1-type contents as
-received, but it applies the sender rules: it refuses a value that only
-tolerance admits, such as an invoke ID of 200 or an empty transaction ID.
+well-formed BER. go-asn1 checks a universal type wherever it appears, under the
+X.690 rules for that type, such as a REAL or the components of an EXTERNAL,
+EMBEDDED PDV or CHARACTER STRING. Without the TC-user's ASN.1, a
+context-specific or application tag outside those gives no type to check.
+Octet-aligned and arbitrary contents are checked only as OCTET STRING and BIT
+STRING encodings, not the octets or bits they carry.
+`TestOpenValueEncodingValidation` pins the forms refused. The TC-user's
+encoding rules, such as 3GPP TS 29.002 clause 17.1.1 for MAP, are for its own
+codec to apply. A dialogue PDU is TCAP syntax in any of the three encodings.
+`Marshal` encodes a message parsed with `WithTolerance` with TCAP's own fields
+afresh and parameters and single-ASN1-type contents as received, but it applies
+the sender rules: it refuses a value that only tolerance admits, such as an
+invoke ID of 200 or an empty transaction ID.
 
 `OID` is a string type, so application context names can be constants.
 `ParseOID` and `Marshal` validate OIDs with go-asn1, which accepts arcs of
 any size; `OID.Arcs()` returns `tcap.ErrUnrepresentableValue` for an arc that
-does not fit in a `uint64`.
+does not fit in a `uint64`. go-asn1 limits only the conversion of an arc to and
+from decimal text, a local resource limit: `Parse` returns go-asn1's
+`runtime.ErrOIDTextLimit` for a valid encoded OID beyond it.
 
 Decode limits apply to decoding and to the inspection that follows a failure.
 On a codec failure, `Parse` copies transaction IDs from
