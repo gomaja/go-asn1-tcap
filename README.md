@@ -193,13 +193,14 @@ if d := received.Dialogue; d != nil && d.Response != nil {
 ### Errors and abnormal procedures
 
 `Marshal` applies the sender rules. The go-asn1 codec checks the ASN.1 of
-Q.773 Annex A and X.880, the encoding rules of X.680 and X.690, and Q.773
-clauses 4.1.1, 4.2.2.2 and 4.2.3. This package checks the dialogue PDUs
-and results that each message type may carry (Q.774 Table 3), the dialogue
-versions (clause 3.2.3), and whether values fit its Go model. TCAP's own
-fields use definite lengths, in the short form below 128 octets and otherwise
-in the fewest octets, and primitive strings (Q.773 clause 4.1.1). Parameters
-retain their supplied bytes and are checked only for well-formed BER.
+Q.773 Annex A and X.880, the encoding rules of X.680 and X.690 (in the
+TC-user's values, only those described below), and Q.773 clauses 4.1.1, 4.2.2.2
+and 4.2.3. This package checks the dialogue PDUs and results that each message
+type may carry (Q.774 Table 3), the dialogue versions (clause 3.2.3), and
+whether values fit its Go model. TCAP's own fields use definite lengths, in the
+short form below 128 octets and otherwise in the fewest octets, and primitive
+strings (Q.773 clause 4.1.1). Parameters retain their supplied bytes and are
+checked only for well-formed BER.
 
 `Parse` applies the receiver rules. By default it accepts BER with the
 restrictions of Q.773 clause 4.1.1 in TCAP's own syntax: lengths below 128
@@ -325,9 +326,10 @@ information and Opaque EXTERNALs are the TC-user's syntax (ITU-T X.690
 (02/2021) clauses 8.15 and 8.18), which Q.773 clause 4.1.1 does not cover.
 Parameters and single-ASN1-type contents keep the BER bytes they were given
 or received; `Parse` in either mode and `Marshal` check only that they are
-well-formed BER. go-asn1 checks a universal type wherever it appears, under the
-X.690 rules for that type, such as a REAL or the components of an EXTERNAL,
-EMBEDDED PDV or CHARACTER STRING. Without the TC-user's ASN.1, a
+well-formed BER. go-asn1 applies the rules it has for universal types wherever
+they appear, such as the contents of a REAL or the components of an EXTERNAL,
+EMBEDDED PDV or CHARACTER STRING. Not every X.690 rule is among them: the
+length of a BMPString, for one, is not checked. Without the TC-user's ASN.1, a
 context-specific or application tag outside those gives no type to check.
 Octet-aligned and arbitrary contents are checked only as OCTET STRING and BIT
 STRING encodings, not the octets or bits they carry.

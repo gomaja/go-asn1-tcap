@@ -68,14 +68,15 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	if errors.Is(validation, ber.ErrResourceLimit) {
 		// Only the codec's limit skips repeat counting. An inspection limit
 		// still permits counting immediate tags within the scan's budget.
-		children, _ := scanChildren(inspectedContents(data), limits)
+		contents, _ := inspectedMessageContents(data, limits)
+		children, _ := scanChildren(contents, limits)
 		idCount = children.idCount
 		pe.Err = joinErrors(pe.Err, validation)
 		return pe
 	}
 	_, n, value, err := ber.DecodeTLV(data, opts...)
 	if err != nil {
-		value = inspectedContents(data)
+		value, n = inspectedMessageContents(data, limits)
 	}
 	// ITU-T Q.774 (06/97) Table 7: count immediate ID tags even when the
 	// outer header is invalid or the last child cannot be delimited.
@@ -86,7 +87,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		pe.Err = joinErrors(pe.Err, firstLimit(validation))
 		return pe
 	}
-	if err == nil && n != len(data) {
+	if n != 0 && n != len(data) {
 		return pe
 	}
 	if err != nil {
@@ -119,6 +120,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	if pe.MessageType == "" || n != len(data) || !soundTransaction(children, pe.MessageType, prefix, opts) {
 		return pe
 	}
+	dialogueFailure := isDialogueFailure(data, failure)
 	var dialogue *Dialogue
 	for _, data := range children.leading {
 		t, _, value, delimErr := ber.DecodeTLV(data, opts...)
@@ -140,6 +142,14 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			}
 			if err != nil {
 				pe.Portion, pe.Err = PortionDialogue, err
+				return pe
+			}
+			// A message rule can fail where the dialogue decodes on its
+			// own (Q.773 (06/97) clause 4.2.3). An incorrect dialogue portion
+			// aborts the dialogue (Q.774 (06/97) clause 3.2.2.1), so the
+			// codec's location goes before any component failure.
+			if dialogueFailure {
+				pe.Portion = PortionDialogue
 				return pe
 			}
 			dialogue = d
@@ -198,12 +208,6 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 				}
 			}
 		}
-	}
-	// The transaction portion is sound and the portions decode on their own,
-	// so a codec refusal located at the dialogue portion is a rule of the
-	// whole message, such as Q.773 clause 4.2.3.
-	if isDialogueFailure(data, failure) {
-		pe.Portion = PortionDialogue
 	}
 	return pe
 }
@@ -411,6 +415,37 @@ func (b *scanBudget) elementLength(data []byte) (int, error) {
 		return 0, ber.ErrResourceLimit
 	}
 	return pos, nil
+}
+
+// inspectedMessageContents bounds an indefinite message at its matching EOC
+// (X.690 (02/2021) clauses 8.1.3.6 and 8.1.5), using the child scan's budget.
+// If delimiting fails, inspection keeps the remainder, as for a truncated
+// message. The length is zero unless the matching EOC was found.
+func inspectedMessageContents(data []byte, limits ber.DecodeLimits) ([]byte, int) {
+	contents := inspectedContents(data)
+	_, tn, err := ber.DecodeTag(data)
+	if err != nil {
+		return contents, 0
+	}
+	_, indefinite, ln, err := ber.DecodeLength(data[tn:])
+	if err != nil || !indefinite {
+		return contents, 0
+	}
+	budget := scanBudget{limits: limits, elements: 1}
+	for pos := 0; pos < len(contents); {
+		if len(contents)-pos >= 2 && contents[pos] == 0 && contents[pos+1] == 0 {
+			if limits.MaxWork-budget.work < 2 {
+				break
+			}
+			return contents[:pos], tn + ln + pos + 2
+		}
+		n, err := budget.elementLength(contents[pos:])
+		if err != nil {
+			break
+		}
+		pos += n
+	}
+	return contents, 0
 }
 
 // inspectedContents returns the contents of a constructed element whose
