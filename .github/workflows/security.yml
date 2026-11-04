@@ -114,12 +114,15 @@ jobs:
           compare github.com/golangci/golangci-lint/v2 "$(grep -A2 'golangci-lint-action@' "$ci" | sed -n 's/.*version: //p')"
           compare golang.org/x/vuln "$(sed -n 's/^ *go install .*govulncheck@//p' "$security")"
           compare github.com/zricethezav/gitleaks/v8 "$(sed -n 's/^ *go install .*gitleaks\/v8@//p' "$security")"
+          existing="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')"
           if [ -z "$stale" ]; then
             echo "all tool pins are current"
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --comment "All tool pins are current."
+            fi
             exit 0
           fi
           printf '%s' "$stale"
-          existing="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')"
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$stale"
           else
