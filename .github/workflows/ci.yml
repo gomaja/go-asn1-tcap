@@ -39,9 +39,12 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           # A new branch has a zero `before`, and a force push can leave it
-          # unreachable. Without a merge base, check the last commit alone.
+          # unreachable. Without a merge base, check the last commit alone,
+          # against its first parent, so that a merge commit is checked too.
           if [ -n "$BASE" ] && git merge-base "$BASE" HEAD >/dev/null 2>&1; then
             git diff --check "$BASE...HEAD"
+          elif git rev-parse -q --verify 'HEAD^' >/dev/null; then
+            git diff --check 'HEAD^' HEAD
           else
             git diff-tree --check --root --no-commit-id -r HEAD
           fi
