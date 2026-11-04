@@ -579,7 +579,6 @@ func TestMarshalExternal(t *testing.T) {
 		{name: "indirect reference only", msg: &tcap.Abort{DTID: tidD, Dialogue: &tcap.Dialogue{Opaque: &tcap.External{
 			IndirectReference: big.NewInt(7), Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("0500"),
 		}}}, constraint: true, path: "Dialogue.Opaque"},
-		{name: "no reference", msg: opaque(tcap.External{Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: ber.ErrInvalidValue, path: "Dialogue.Opaque"},
 		{name: "single-ASN1-type verbatim", msg: opaque(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: hx("3081020500")}),
 			want: "64164904050607086b0e280c06032a0304a0053081020500"},
 		{name: "user information two elements", msg: userInfo(tcap.External{DirectReference: "1.2.3.4", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("0102")}),
@@ -605,7 +604,7 @@ func TestMarshalExternal(t *testing.T) {
 		// X.690 (02/2021) clause 8.18.4 Table 2: an EXTERNAL needs a direct
 		// or an indirect reference; go-asn1 reports ber.ErrInvalidValue
 		// (runtime/ber/external.go, encodeExternal).
-		{name: "no reference", msg: opaque(tcap.External{Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: ber.ErrInvalidValue},
+		{name: "no reference", msg: opaque(tcap.External{Encoding: runtime.ExternalSingleASN1Type, SingleASN1Type: single}), is: ber.ErrInvalidValue, path: "Dialogue.Opaque"},
 		{name: "user information no reference", msg: userInfo(tcap.External{Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("01")}), is: ber.ErrInvalidValue},
 	})
 }
