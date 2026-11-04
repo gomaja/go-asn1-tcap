@@ -79,15 +79,15 @@
 // explicit [0], which must be constructed and hold exactly one value (clause
 // 8.14.3). Without the TC-user's ASN.1, any other context-specific or
 // application tag gives no type to check. Octet-aligned and arbitrary contents
-// are checked only as OCTET STRING and BIT STRING encodings (clauses 8.6 and
-// 8.7): the initial octet of a BIT STRING and the segments of a constructed
+// are checked only as OCTET STRING and BIT STRING encodings (clauses 8.7 and
+// 8.6): the initial octet of a BIT STRING and the segments of a constructed
 // value, not the octets or bits they carry. The TC-user's encoding rules, such
 // as 3GPP TS 29.002 clause 17.1.1 for MAP, are for its own codec to apply. A
 // dialogue PDU is TCAP syntax in any of the three encodings. Marshal encodes a
-// message parsed with WithTolerance with TCAP's own fields afresh and the
-// TC-user's bytes as received, but it applies the sender rules: it refuses a
-// value that only tolerance admits, such as an invoke ID of 200 or an empty
-// transaction ID.
+// message parsed with WithTolerance with TCAP's own fields afresh and
+// parameters and single-ASN1-type contents as received, but it applies the
+// sender rules: it refuses a value that only tolerance admits, such as an
+// invoke ID of 200 or an empty transaction ID.
 //
 // ASN.1 size and value constraints are reported as *ber.ValidationError from
 // github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber; use errors.As.
