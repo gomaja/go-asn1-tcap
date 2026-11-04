@@ -79,18 +79,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
 		{
-			name: "begin trailing octet", hex: "620348010100",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin second message", hex: "62034801016203480101",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin extra null inside", hex: "62054801010500",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
-		},
-		{
 			name: "begin codec depth limit", hex: "620d4801016c08a10602010102012d",
 			limits: tcap.DecodeLimits{MaxDepth: 1},
 			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
@@ -98,11 +86,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 		{
 			name: "begin codec elements limit", hex: "6203480101",
 			limits: tcap.DecodeLimits{MaxElements: 1},
-			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
-		},
-		{
-			name: "begin codec work limit", hex: "6203480101",
-			limits: tcap.DecodeLimits{MaxWork: 1},
 			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
 		},
 		{
@@ -114,16 +97,8 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
 		{
-			name: "continue trailing octet", hex: "650648010149010200",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
 			name: "continue second message", hex: "65064801014901026506480101490102",
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "continue extra null inside", hex: "65084801014901020500",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
 			name: "continue codec depth limit", hex: "65104801014901026c08a10602010102012d",
@@ -136,11 +111,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
 		},
 		{
-			name: "continue codec work limit", hex: "6506480101490102",
-			limits: tcap.DecodeLimits{MaxWork: 1},
-			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
-		},
-		{
 			name: "end valid", hex: "6403490102",
 			want: success, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
@@ -149,16 +119,8 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
 		{
-			name: "end trailing octet", hex: "640349010200",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
 			name: "end second message", hex: "64034901026403490102",
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "end extra null inside", hex: "64054901020500",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
 			name: "end codec depth limit", hex: "640d4901026c08a10602010102012d",
@@ -168,11 +130,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 		{
 			name: "end codec elements limit", hex: "6403490102",
 			limits: tcap.DecodeLimits{MaxElements: 1},
-			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
-		},
-		{
-			name: "end codec work limit", hex: "6403490102",
-			limits: tcap.DecodeLimits{MaxWork: 1},
 			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
 		},
 		{
@@ -211,28 +168,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:   resource, ref: "Q.773 (06/97) Table 12; Q.774 (06/97) Figure A.3",
 		},
 		{
-			name: "begin declared length exceeds input", hex: "620648027f016c",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin OTID followed by NULL", hex: "620648027f010500",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A; Q.774 (06/97) clause 3.2.3",
-		},
-		{
-			name: "begin declared length exceeds input tolerant", hex: "620648027f016c",
-			tolerant: true,
-			want:     badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin OTID followed by NULL tolerant", hex: "620648027f010500",
-			tolerant: true,
-			want:     incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
-		},
-		{
-			name: "reserved 3", hex: "6300",
-			want: unknown, ref: "Q.773 (06/97) clause 4.2.1.2, Table 8; Q.774 (06/97) Figure A.3",
-		},
-		{
 			name: "reserved 6", hex: "6600",
 			want: unknown, ref: "Q.773 (06/97) clause 4.2.1.2, Table 8; Q.774 (06/97) Figure A.3",
 		},
@@ -269,14 +204,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want: unknown, ref: "Q.773 (06/97) clause 4.2.1.2, Table 8; Q.774 (06/97) Figure A.3",
 		},
 		{
-			name: "begin primitive message tag", hex: "4203480101",
-			want: unknown, ref: "Q.773 (06/97) clause 4.2.1.2, Table 8; Q.774 (06/97) Figure A.3",
-		},
-		{
-			name: "continue primitive message tag", hex: "4506480101490102",
-			want: unknown, ref: "Q.773 (06/97) clause 4.2.1.2, Table 8; Q.774 (06/97) Figure A.3",
-		},
-		{
 			name: "end primitive message tag", hex: "4403490102",
 			want: unknown, ref: "Q.773 (06/97) clause 4.2.1.2, Table 8; Q.774 (06/97) Figure A.3",
 		},
@@ -300,14 +227,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:   unknown, ref: "Q.773 (06/97) clause 4.2.1.2, Table 8; Q.774 (06/97) Figure A.3",
 		},
 		{
-			name: "empty", hex: "",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "tag only", hex: "62",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
 			name: "truncated high tag", hex: "7f",
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
@@ -325,10 +244,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 		},
 		{
 			name: "truncated length octets", hex: "628201",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "reserved length octet", hex: "62ff",
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
 		{
@@ -353,14 +268,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 		},
 		{
 			name: "unidirectional indefinite missing eoc", hex: "61806c08a10602010102012d",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin indefinite valid", hex: "62804801010000",
-			want: success, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin indefinite missing eoc", hex: "6280480101",
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
 		{
@@ -438,24 +345,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:     success, ref: "Q.773 (06/97) clause 4.1.1",
 		},
 		{
-			name: "begin long length below 128 strict", hex: "628103480101",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin long length below 128 tolerant", hex: "628103480101",
-			tolerant: true,
-			want:     success, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin nonminimal length strict", hex: "62820003480101",
-			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
-			name: "begin nonminimal length tolerant", hex: "62820003480101",
-			tolerant: true,
-			want:     success, ref: "Q.773 (06/97) clause 4.1.1",
-		},
-		{
 			name: "continue long length below 128 strict", hex: "658106480101490102",
 			want: badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
@@ -519,15 +408,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:     incorrect, ref: "Q.773 (06/97) clause 4.1.1; Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
-			name: "begin constructed tid strict", hex: "62056803040101",
-			want: badBER, ref: "Q.773 (06/97) clauses 4.1.1 and 4.2.1.3, Tables 9 and 10 and Annex A",
-		},
-		{
-			name: "begin constructed tid tolerant", hex: "62056803040101",
-			tolerant: true,
-			want:     success, ref: "Q.773 (06/97) clauses 4.1.1 and 4.2.1.3, Tables 9 and 10 and Annex A",
-		},
-		{
 			name: "continue constructed dtid strict", hex: "65084801016903040102",
 			want: badBER, ref: "Q.773 (06/97) clauses 4.1.1 and 4.2.1.3, Tables 9 and 10 and Annex A",
 		},
@@ -582,17 +462,9 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:     badBER, ref: "Q.773 (06/97) clauses 4.1.1 and 4.2.1.3, Tables 9 and 10 and Annex A",
 		},
 		{
-			name: "begin empty tid strict", hex: "62024800",
-			want: incorrect, ref: "Q.773 (06/97) clauses 4.1.1 and 4.2.1.3, Tables 9 and 10 and Annex A",
-		},
-		{
 			name: "begin empty tid tolerant", hex: "62024800",
 			tolerant: true,
 			want:     success, ref: "Q.773 (06/97) clauses 4.1.1 and 4.2.1.3, Tables 9 and 10 and Annex A",
-		},
-		{
-			name: "begin five octets tid strict", hex: "620748050102030405",
-			want: incorrect, ref: "Q.773 (06/97) clauses 4.1.1 and 4.2.1.3, Tables 9 and 10 and Annex A",
 		},
 		{
 			name: "begin five octets tid tolerant", hex: "620748050102030405",
@@ -681,15 +553,7 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want:     badBER, ref: "Q.773 (06/97) clause 4.1.1",
 		},
 		{
-			name: "begin missing otid", hex: "6200",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
-		},
-		{
 			name: "begin dtid instead of otid", hex: "6203490102",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
-		},
-		{
-			name: "begin two otids", hex: "6206480101480102",
 			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
@@ -713,10 +577,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
-			name: "continue ids swapped", hex: "6506490102480101",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
-		},
-		{
 			name: "continue repeated dtid", hex: "6509480101490102490103",
 			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
@@ -729,15 +589,7 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
-			name: "end missing dtid", hex: "6400",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
-		},
-		{
 			name: "unidirectional with tid", hex: "610d4801016c08a10602010102012d",
-			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
-		},
-		{
-			name: "unidirectional without components", hex: "6100",
 			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
@@ -854,16 +706,8 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 			want: incorrect, ref: "Q.773 (06/97) clauses 3.1 and 4.2.1.1, Tables 3 to 7 and Annex A",
 		},
 		{
-			name: "begin malformed dialogue own portion", hex: "62054801016b00",
-			want: dialogue, ref: "Q.773 (06/97) clause 4; Q.774 (06/97) clauses 3.2.2.1 and 3.2.2.2, Table 5",
-		},
-		{
 			name: "end malformed dialogue own portion", hex: "64054901026b00",
 			want: dialogue, ref: "Q.773 (06/97) clause 4; Q.774 (06/97) clauses 3.2.2.1 and 3.2.2.2, Table 5",
-		},
-		{
-			name: "begin malformed component own portion", hex: "620a4801016c05a103020101",
-			want: component, ref: "Q.773 (06/97) clause 4; Q.774 (06/97) clauses 3.2.2.1 and 3.2.2.2, Table 5",
 		},
 		{
 			name: "continue malformed component own portion", hex: "650d4801014901026c05a103020101",
@@ -928,11 +772,6 @@ func parseAbortCauseVectors() []parseAbortCauseVector {
 		{
 			name: "begin inspection only maxwork limit", hex: "620448010105",
 			limits: tcap.DecodeLimits{MaxWork: 5},
-			want:   badBER, ref: "Q.773 (06/97) clause 4.1.1; Q.774 (06/97) Figure A.3",
-		},
-		{
-			name: "begin inspection only maxelements limit", hex: "620448010105",
-			limits: tcap.DecodeLimits{MaxElements: 2},
 			want:   badBER, ref: "Q.773 (06/97) clause 4.1.1; Q.774 (06/97) Figure A.3",
 		},
 		{

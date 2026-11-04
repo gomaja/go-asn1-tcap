@@ -64,7 +64,7 @@ func TestRecipeEncodings(t *testing.T) {
 	}
 }
 
-// TestRecipeFields checks the recipes field by field (contract section 5).
+// TestRecipeFields checks the dialogue recipes field by field.
 func TestRecipeFields(t *testing.T) {
 	isVersion1 := func(t *testing.T, v *runtime.BitString) {
 		t.Helper()
@@ -152,8 +152,7 @@ func TestRecipeFields(t *testing.T) {
 	})
 }
 
-// TestRecipesCopySlices: "Recipes copy their slice arguments" (contract
-// section 5).
+// TestRecipesCopySlices checks that dialogue recipes own their user information.
 func TestRecipesCopySlices(t *testing.T) {
 	other := tcap.External{DirectReference: "1.2.3", Encoding: runtime.ExternalOctetAligned, OctetAligned: hx("ff")}
 	diag := tcap.ResultSourceDiagnostic{DialogueServiceUser: userNull()}
@@ -200,7 +199,7 @@ func TestProtocolVersion1(t *testing.T) {
 }
 
 // TestOffersVersion1: absent means DEFAULT {version1} (Q.773 clause 3.2.1);
-// otherwise bit 0, version1, must be set (contract section 5).
+// otherwise OffersVersion1 requires bit 0, version1, to be set.
 func TestOffersVersion1(t *testing.T) {
 	cases := []struct {
 		name string

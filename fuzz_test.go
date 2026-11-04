@@ -14,9 +14,9 @@ import (
 
 // FuzzParse: Parse never panics and never changes its input; every error is
 // a *tcap.ParseError; a parsed message marshals, unless it breaks a rule
-// that only the sender applies (contract 4.2: the protocol-version of an
-// AARQ or AUDT and the user information of a provider ABRT are accepted on
-// receipt); the marshalled form parses back to the same message, and
+// that only the sender applies (Dialogue in dialogue.go: the protocol-version
+// of an AARQ or AUDT and the user information of a provider ABRT are accepted
+// on receipt); the marshalled form parses back to the same message, and
 // marshals again to the same octets.
 func FuzzParse(f *testing.F) {
 	addParseSeeds(f)
@@ -53,7 +53,7 @@ func FuzzParse(f *testing.F) {
 		if err != nil {
 			t.Fatalf("Parse(Marshal(%x)) = %v; Marshal gave %x", data, err, out)
 		}
-		assertSameMessage(t, msg, again)
+		assertExactMessage(t, msg, again)
 		out2, err := again.Marshal()
 		if err != nil || !bytes.Equal(out, out2) {
 			t.Fatalf("Marshal is not stable: %x then %x, %v", out, out2, err)

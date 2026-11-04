@@ -96,7 +96,7 @@ type marshalCase struct {
 }
 
 // fieldSentinels are the errors Marshal detects itself and reports inside a
-// *tcap.FieldError (contract section 3).
+// *tcap.FieldError.
 var fieldSentinels = []error{
 	tcap.ErrInvalidOID, tcap.ErrUnrepresentableValue,
 	tcap.ErrComponentNoAlternative, tcap.ErrComponentMultipleAlternatives,
@@ -251,7 +251,7 @@ func TestMarshalIssue13(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	assertSameMessage(t, msg, parsed)
+	assertExactMessage(t, msg, parsed)
 	b := parsed.(*tcap.Begin)
 	if inv := b.Components[0].Invoke; inv == nil || inv.LinkedID == nil || *inv.LinkedID != 1 || inv.Parameter != nil {
 		t.Errorf("parsed %s", jsonText(normalize(parsed)))
@@ -259,7 +259,7 @@ func TestMarshalIssue13(t *testing.T) {
 }
 
 // TestMarshalTransactionPortion: OTID and DTID are OCTET STRING (SIZE (1..4)),
-// Q.773 clause 3.1; the codec reports the constraint (contract 3.1).
+// Q.773 clause 3.1; the codec reports the constraint.
 func TestMarshalTransactionPortion(t *testing.T) {
 	five := tcap.TransactionID{1, 2, 3, 4, 5}
 	runMarshalCases(t, []marshalCase{
@@ -275,7 +275,7 @@ func TestMarshalTransactionPortion(t *testing.T) {
 	})
 }
 
-// TestMarshalComponentPortion covers contract 3.2 and 3.3.
+// TestMarshalComponentPortion checks component presence and alternative selection.
 func TestMarshalComponentPortion(t *testing.T) {
 	runMarshalCases(t, []marshalCase{
 		{name: "begin empty components", msg: &tcap.Begin{OTID: tidO, Components: []tcap.Component{}}, constraint: true},
@@ -301,7 +301,7 @@ func TestMarshalComponentPortion(t *testing.T) {
 }
 
 // TestMarshalComponentIDs: component IDs are one octet, -128..127 (Q.773
-// clause 4.2.2.2), reported as *ber.ValidationError (contract 3.4).
+// clause 4.2.2.2), reported as *ber.ValidationError.
 func TestMarshalComponentIDs(t *testing.T) {
 	linked := func(id int64) *tcap.Begin {
 		return beginWith(tcap.Component{Invoke: &tcap.Invoke{InvokeID: 3, LinkedID: &id, OpCode: tcap.LocalCode(60)}})
@@ -343,7 +343,7 @@ func TestMarshalComponentIDs(t *testing.T) {
 	})
 }
 
-// TestMarshalCodes covers contract 3.5: local codes are INTEGER, global codes
+// TestMarshalCodes: local codes are INTEGER, global codes
 // OBJECT IDENTIFIER (Q.773 clauses 4.2.2.3 and 4.2.2.5).
 func TestMarshalCodes(t *testing.T) {
 	inv := func(op tcap.Code) *tcap.Begin {
@@ -408,7 +408,6 @@ func TestMarshalParameters(t *testing.T) {
 	})
 }
 
-// TestMarshalReject covers contract 3.7.
 func TestMarshalReject(t *testing.T) {
 	rej := func(p tcap.Problem) *tcap.End {
 		return &tcap.End{DTID: tidD, Components: []tcap.Component{{Reject: &tcap.Reject{InvokeID: ptr[int64](1), Problem: p}}}}
@@ -423,7 +422,6 @@ func TestMarshalReject(t *testing.T) {
 	})
 }
 
-// TestMarshalAbort covers contract 3.8.
 func TestMarshalAbort(t *testing.T) {
 	runMarshalCases(t, []marshalCase{
 		{name: "cause and dialogue", msg: &tcap.Abort{DTID: tidD, PAbortCause: ptr(wire.PAbortCauseResourceLimitationValue()), Dialogue: abrtUserD(nil)}, is: tcap.ErrAbortMultipleReasons},
@@ -432,7 +430,7 @@ func TestMarshalAbort(t *testing.T) {
 	})
 }
 
-// TestMarshalDialoguePlacement is ITU-T Q.774 (06/97) Table 3 (contract 3.9):
+// TestMarshalDialoguePlacement checks the placement rules of Dialogue (dialogue.go):
 // every dialogue alternative in every message type.
 func TestMarshalDialoguePlacement(t *testing.T) {
 	type alt struct {
@@ -496,7 +494,7 @@ func TestMarshalDialoguePlacement(t *testing.T) {
 	runMarshalCases(t, cases)
 }
 
-// TestMarshalDialogueRules covers the rest of contract 3.9.
+// TestMarshalDialogueRules checks Dialogue alternatives, results, versions and fields.
 func TestMarshalDialogueRules(t *testing.T) {
 	rsd := func(d tcap.ResultSourceDiagnostic) *tcap.Continue {
 		dlg := aareD(pv1(), true)
@@ -547,7 +545,7 @@ func TestMarshalDialogueRules(t *testing.T) {
 		{name: "AARE bit 0 clear", msg: aareIn(pv("00", 1)), is: tcap.ErrUnsupportedProtocolVersion},
 		{name: "AARE empty bit string", msg: aareIn(&runtime.BitString{}), is: tcap.ErrUnsupportedProtocolVersion},
 
-		// Application context name, contract 3.9 and 3.11.
+		// Application context names follow the canonical OID rules (oid.go).
 		{name: "AARQ ACN empty", msg: beginD(aarqD(pv1(), "", nil)), is: tcap.ErrInvalidOID, pathPrefix: "Dialogue"},
 		{name: "AARQ ACN first arc 3", msg: beginD(aarqD(pv1(), "3.1", nil)), is: tcap.ErrInvalidOID},
 		{name: "AARQ ACN beyond uint64", msg: beginD(aarqD(pv1(), "0.4.18446744073709551616", nil)), want: "623b4804010203046b222820060700118605010101a015601380020780a10d060b04828080808080808080006c0fa10d02010102012d30050403010203"},
@@ -558,8 +556,8 @@ func TestMarshalDialogueRules(t *testing.T) {
 	})
 }
 
-// TestMarshalExternal covers contract 3.10 and the EXTERNAL encodings of
-// ITU-T X.690 (02/2021) clause 8.18 (Q.773 Tables 49 to 53).
+// TestMarshalExternal covers the EXTERNAL encodings of ITU-T X.690
+// (02/2021) clause 8.18 (Q.773 Tables 49 to 53).
 func TestMarshalExternal(t *testing.T) {
 	opaque := func(e tcap.External) *tcap.End {
 		return &tcap.End{DTID: tidD, Dialogue: &tcap.Dialogue{Opaque: &e}}

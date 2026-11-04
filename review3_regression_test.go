@@ -318,50 +318,66 @@ func TestReview3NoInvokeIDOfPrimitiveElement(t *testing.T) {
 	}
 }
 
-// Parsing deeply segmented IDs has an absolute allocation bound
-// (ITU-T X.690 (02/2021) clause 8.7.3).
+// Parsing deeply segmented IDs (X.690 (02/2021) clause 8.7.3) must not
+// copy or charge the payload at every nesting level. Doubling the payload
+// allocated about 1.2 times as much on Go 1.26.10 and 1.27.3, with and without
+// -race. Allow 1.5 times: copying 120 payloads would cost at least 120 MiB
+// for the smaller input alone, then another 120 MiB when its size doubles.
+// Most of the cost does not grow with the payload, so that ratio cannot see
+// it growing. The ceiling for the smaller input, about 35% over the largest
+// measurement, bounds it.
 func TestReview3SegmentedIDCost(t *testing.T) {
-	id := tlv("04", strings.Repeat("aa", 1<<20))
-	for range 120 {
-		id = tlv("24", id)
+	var inputs [2][]byte
+	for i := range inputs {
+		id := tlv("04", strings.Repeat("aa", (i+1)<<20))
+		for range 120 {
+			id = tlv("24", id)
+		}
+		inputs[i] = hx(tlv("62", tlv("68", id), tlv("6c", hexCodecBadInvoke)))
 	}
-	input := hx(tlv("62", tlv("68", id), tlv("6c", hexCodecBadInvoke)))
-	for _, tc := range []struct {
-		name     string
-		tolerant bool
-		budget   int64
-	}{
-		{"strict", false, 4 << 20},
-		{"tolerant", true, 48 << 20},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var opts []tcap.ParseOption
-			var log ber.ViolationLog
-			if tc.tolerant {
-				opts = append(opts, tcap.WithTolerance(&log))
+	for _, tolerant := range []bool{false, true} {
+		name := "strict"
+		if tolerant {
+			name = "tolerant"
+		}
+		t.Run(name, func(t *testing.T) {
+			var allocations [2]uint64
+			for i, input := range inputs {
+				size := (i + 1) << 20
+				var opts []tcap.ParseOption
+				var log ber.ViolationLog
+				if tolerant {
+					opts = append(opts, tcap.WithTolerance(&log))
+				}
+				var before, after runtime.MemStats
+				runtime.ReadMemStats(&before)
+				_, err := tcap.Parse(input, opts...)
+				runtime.ReadMemStats(&after)
+				var pe *tcap.ParseError
+				if !errors.As(err, &pe) {
+					t.Fatalf("Parse = %v", err)
+				}
+				wantLength := 0
+				if tolerant {
+					wantLength = size
+				}
+				if len(pe.OTID) != wantLength {
+					t.Fatalf("OTID has %d octets, want %d: %v", len(pe.OTID), wantLength, err)
+				}
+				if tolerant && errors.Is(err, ber.ErrResourceLimit) {
+					t.Fatalf("segmented bytes charged more than once: %v", err)
+				}
+				allocations[i] = after.TotalAlloc - before.TotalAlloc
+				t.Logf("%d payload octets: Parse allocated %d octets", size, allocations[i])
+				if !tolerant && allocations[i] > 4<<20 {
+					t.Fatalf("strict Parse allocated %d octets", allocations[i])
+				}
 			}
-			var before, after runtime.MemStats
-			runtime.ReadMemStats(&before)
-			_, err := tcap.Parse(input, opts...)
-			runtime.ReadMemStats(&after)
-			var pe *tcap.ParseError
-			if !errors.As(err, &pe) {
-				t.Fatalf("Parse = %v", err)
+			if tolerant && allocations[0] > 64<<20 {
+				t.Fatalf("tolerant Parse allocated %d octets", allocations[0])
 			}
-			wantLength := 0
-			if tc.tolerant {
-				wantLength = 1 << 20
-			}
-			if len(pe.OTID) != wantLength {
-				t.Fatalf("OTID has %d octets, want %d: %v", len(pe.OTID), wantLength, err)
-			}
-			if tc.tolerant && errors.Is(err, ber.ErrResourceLimit) {
-				t.Fatalf("segmented bytes charged more than once: %v", err)
-			}
-			allocated := after.TotalAlloc - before.TotalAlloc
-			t.Logf("Parse allocated %d octets", allocated)
-			if allocated > uint64(tc.budget) {
-				t.Fatalf("Parse allocated %d octets", allocated)
+			if tolerant && allocations[1] > allocations[0]*3/2 {
+				t.Fatalf("doubling the payload allocated %d then %d octets, want at most 1.5 times", allocations[0], allocations[1])
 			}
 		})
 	}
