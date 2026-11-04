@@ -170,7 +170,10 @@ type ParseError struct {
 	OTID TransactionID
 	DTID TransactionID
 
-	// Portion is the portion of the message that failed.
+	// Portion is the portion of the message that failed. A Q.773 clause 4.1.1
+	// fault in the header of the dialogue portion is in PortionDialogue, since
+	// that portion is decoded on its own. One in the header of the component
+	// portion is in PortionTransaction, since no component is at fault.
 	Portion Portion
 
 	// ComponentIndex is the position of the failing component within the
