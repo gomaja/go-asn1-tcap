@@ -72,20 +72,28 @@
 // cover. Parameters and single-ASN1-type contents keep the BER bytes they
 // were given or received; Parse in either mode and Marshal check only that
 // they are well-formed BER. That covers REAL contents (X.690 clause 8.5) and
-// the explicit [0] of an EXTERNAL, EMBEDDED PDV or CHARACTER STRING, which
-// must be constructed and hold exactly one value (clauses 8.14.3, 8.17.1,
-// 8.18.1 and 8.24.1). Without the TC-user's ASN.1, a context-specific or
+// the components of an EXTERNAL, EMBEDDED PDV or CHARACTER STRING (clauses
+// 8.17.1, 8.18.1 and 8.24.1): their order and number, the contents of their
+// base types (clause 8.14.4), the direct or indirect reference that an
+// EXTERNAL's identification requires (clause 8.18.4, Table 2), and the
+// explicit [0], which must be constructed and hold exactly one value (clause
+// 8.14.3). Without the TC-user's ASN.1, any other context-specific or
 // application tag gives no type to check. Octet-aligned and arbitrary contents
-// are not checked. The TC-user's encoding rules, such as 3GPP TS 29.002 clause
-// 17.1.1 for MAP, are for its own codec to apply. A dialogue PDU is TCAP
-// syntax in any of the three encodings. A message parsed with WithTolerance
-// marshals with TCAP's own fields encoded afresh and the TC-user's bytes as
-// received.
+// are checked only as OCTET STRING and BIT STRING encodings (clauses 8.6 and
+// 8.7): the initial octet of a BIT STRING and the segments of a constructed
+// value, not the octets or bits they carry. The TC-user's encoding rules, such
+// as 3GPP TS 29.002 clause 17.1.1 for MAP, are for its own codec to apply. A
+// dialogue PDU is TCAP syntax in any of the three encodings. Marshal encodes a
+// message parsed with WithTolerance with TCAP's own fields afresh and the
+// TC-user's bytes as received, but it applies the sender rules: it refuses a
+// value that only tolerance admits, such as an invoke ID of 200 or an empty
+// transaction ID.
 //
 // ASN.1 size and value constraints are reported as *ber.ValidationError from
 // github.com/gomaja/go-asn1/telecom/ss7/tcap/runtime/ber; use errors.As.
 // Malformed BER, including parameter and EXTERNAL single-ASN1-type bytes,
-// is reported with codec errors such as ber.ErrTruncated or *ber.ElementError.
+// is reported with codec errors such as ber.ErrTruncated, ber.ErrInvalidValue
+// or *ber.ElementError.
 // The rules this package checks itself are reported with its Err sentinels;
 // use errors.Is. Marshal wraps them in a FieldError that names the field.
 // The codec reports a validly encoded element that the ASN.1 does not admit,
@@ -127,10 +135,11 @@
 // Unidirectional (Q.773 clause 4.2.3). This package enforces the Begin's AARQ
 // requirement and the other Q.774 Table 3 rules. When Marshal encodes an AARQ,
 // AARE or AUDT, a nil protocol-version is omitted and means the DEFAULT
-// {version1}; a non-nil
-// value is encoded, including ProtocolVersion1(). When it encodes a BIT
-// STRING, it clears the unused bits of the last octet without changing the
-// caller's value (X.690 (02/2021) clause 8.6.2.4).
+// {version1}; a non-nil value is encoded, including ProtocolVersion1(). When
+// it encodes a protocol-version or an Arbitrary value, it clears the unused
+// bits of the last octet, as X.690 (02/2021) clause 11.2.1 requires of CER and
+// DER, without changing the caller's value. The TC-user's BER in a parameter
+// or single-ASN1-type stays as given, unused bits included.
 //
 // The values of TCAP protocol elements (P-Abort causes, problem codes,
 // associate results and diagnostics, abort sources) are go-asn1's generated

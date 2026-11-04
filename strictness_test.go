@@ -226,17 +226,38 @@ func TestParseInspectionKeepsTolerance(t *testing.T) {
 }
 
 func TestParseStrictTransactionFailure(t *testing.T) {
-	for _, tc := range []struct{ input, otid string }{
-		{"620448810101", ""},
-		{"6208488101016c020000", ""},
-		{"6281084801016c03a10100", "01"},
+	for _, tc := range []struct{ input, otid, dtid string }{
+		{"620448810101", "", ""},
+		{"6208488101016c020000", "", ""},
+		{"6281084801016c03a10100", "01", ""},
+		// Q.773 (06/97) clause 4.1.1 applies to a leading transaction ID
+		// even when the codec stopped at the message header, whose length
+		// is in the long form here: an ID in the long form is not derived,
+		// one in the short form before it is.
+		{"62810448810101", "", ""},
+		{"62810448010105", "01", ""},
+		{"65810748010149810102", "01", ""},
+		{"65810748810101490102", "", ""},
+		// The same with a leading zero octet in the lengths.
+		{"628200054882000101", "", ""},
+		{"648200054982000102", "", ""},
+		{"6582000a48820001014982000102", "", ""},
 	} {
 		_, err := tcap.Parse(hx(tc.input))
 		var pe *tcap.ParseError
 		var validation *ber.ValidationError
-		if !errors.As(err, &pe) || !errors.As(err, &validation) || pe.OTID.String() != tc.otid || (pe.OTID == nil) != (tc.otid == "") || pe.Portion != tcap.PortionTransaction {
+		if !errors.As(err, &pe) || !errors.As(err, &validation) || pe.Portion != tcap.PortionTransaction ||
+			pe.OTID.String() != tc.otid || (pe.OTID == nil) != (tc.otid == "") ||
+			pe.DTID.String() != tc.dtid || (pe.DTID == nil) != (tc.dtid == "") {
 			t.Fatalf("strict transaction context: %v; %#v", err, pe)
 		}
+	}
+	// A truncated message fails at the message too, without a
+	// *ber.ValidationError: the OTID before the cut breaks clause 4.1.1.
+	_, err := tcap.Parse(hx("62064881010202"))
+	var pe *tcap.ParseError
+	if !errors.As(err, &pe) || !errors.Is(err, ber.ErrTruncated) || pe.OTID != nil || pe.Portion != tcap.PortionTransaction {
+		t.Fatalf("truncated message: %v; %#v", err, pe)
 	}
 }
 
