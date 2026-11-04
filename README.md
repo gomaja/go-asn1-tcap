@@ -301,8 +301,12 @@ AUDT versions are kept for the stack to answer.
 
 The codec decodes the dialogue-as and uniDialogue-as abstract syntaxes into
 AARQ, AARE, ABRT and AUDT; a dialogue portion in any other abstract syntax is
-an `Opaque` EXTERNAL. The codec requires uniDialogue-as with AUDT in a
-Unidirectional (Q.773 clause 4.2.3). This package enforces the Begin's AARQ
+an `Opaque` EXTERNAL. An EXTERNAL whose direct reference is one of those two
+names and that also carries an indirect reference (Q.773 clause 4.2.3) is never
+an `Opaque`: strict `Parse` refuses it with the codec's `*ber.ValidationError`,
+and under `WithTolerance`, where the codec leaves its PDU undecoded, with
+`tcap.ErrUnexpectedDialoguePDU`. The codec requires uniDialogue-as with AUDT in
+a Unidirectional (Q.773 clause 4.2.3). This package enforces the Begin's AARQ
 requirement (Q.774 Figure A.5, sheet 3) and Table 3 placement and results in
 both modes. When `Marshal` encodes an AARQ, AARE or AUDT, a nil
 protocol-version is omitted and means the DEFAULT `{version1}`; a non-nil value

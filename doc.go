@@ -131,15 +131,20 @@
 //
 // The codec decodes the dialogue-as and uniDialogue-as abstract syntaxes into
 // AARQ, AARE, ABRT and AUDT; a dialogue portion in any other abstract syntax
-// is an Opaque EXTERNAL. The codec requires uniDialogue-as with AUDT in a
-// Unidirectional (Q.773 clause 4.2.3). This package enforces the Begin's AARQ
-// requirement and the other Q.774 Table 3 rules. When Marshal encodes an AARQ,
-// AARE or AUDT, a nil protocol-version is omitted and means the DEFAULT
-// {version1}; a non-nil value is encoded, including ProtocolVersion1(). When
-// it encodes a protocol-version or an Arbitrary value, it clears the unused
-// bits of the last octet, as X.690 (02/2021) clause 11.2.1 requires of CER and
-// DER, without changing the caller's value. The TC-user's BER in a parameter
-// or single-ASN1-type stays as given, unused bits included.
+// is an Opaque EXTERNAL. An EXTERNAL whose direct reference is one of those
+// two names and that also carries an indirect reference (Q.773 clause 4.2.3)
+// is never an Opaque: strict Parse refuses it with the codec's
+// *ber.ValidationError, and under WithTolerance, where the codec leaves its
+// PDU undecoded, with ErrUnexpectedDialoguePDU. The codec requires
+// uniDialogue-as with AUDT in a Unidirectional (Q.773 clause 4.2.3). This
+// package enforces the Begin's AARQ requirement and the other Q.774 Table 3
+// rules. When Marshal encodes an AARQ, AARE or AUDT, a nil protocol-version is
+// omitted and means the DEFAULT {version1}; a non-nil value is encoded,
+// including ProtocolVersion1(). When it encodes a protocol-version or an
+// Arbitrary value, it clears the unused bits of the last octet, as X.690
+// (02/2021) clause 11.2.1 requires of CER and DER, without changing the
+// caller's value. The TC-user's BER in a parameter or single-ASN1-type stays
+// as given, unused bits included.
 //
 // The values of TCAP protocol elements (P-Abort causes, problem codes,
 // associate results and diagnostics, abort sources) are go-asn1's generated
