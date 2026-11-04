@@ -49,7 +49,7 @@ jobs:
         id: govulncheck
         shell: bash
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           set +e
           "$(go env GOPATH)/bin/govulncheck" ./... 2>&1 | tee govulncheck.txt
           status=${PIPESTATUS[0]}
@@ -78,6 +78,56 @@ jobs:
       - name: Fail on dependency findings
         if: steps.govulncheck.outputs.status != '0'
         run: exit 1
+
+  tool-pins:
+    name: tool pins
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: true
+      - name: Compare with the latest releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'CI tool pins are out of date'
+        run: |
+          # Dependabot does not see versions in run steps or action inputs.
+          set -euo pipefail
+          stale=""
+          compare() { # module, pinned version
+            latest="$(go list -m -f '{{.Version}}' "$1@latest")"
+            if [ "$2" != "$latest" ]; then
+              stale="$stale- $1: pinned $2, latest $latest"$'\n'
+            fi
+          }
+          ci=.github/workflows/ci.yml
+          security=.github/workflows/security.yml
+          compare honnef.co/go/tools "$(grep -A2 'staticcheck-action@' "$ci" | sed -n 's/.*version: //p')"
+          compare github.com/golangci/golangci-lint/v2 "$(grep -A2 'golangci-lint-action@' "$ci" | sed -n 's/.*version: //p')"
+          compare golang.org/x/vuln "$(sed -n 's/^ *go install .*govulncheck@//p' "$security")"
+          compare github.com/zricethezav/gitleaks/v8 "$(sed -n 's/^ *go install .*gitleaks\/v8@//p' "$security")"
+          existing="$(gh issue list --state open --search "\"$TITLE\" in:title" --json number,title --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')"
+          if [ -z "$stale" ]; then
+            echo "all tool pins are current"
+            if [ -n "$existing" ]; then
+              gh issue close "$existing" --comment "All tool pins are current."
+            fi
+            exit 0
+          fi
+          printf '%s' "$stale"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$stale"
+          else
+            gh issue create --title "$TITLE" --body "$stale"
+          fi
 
   sast:
     name: sast

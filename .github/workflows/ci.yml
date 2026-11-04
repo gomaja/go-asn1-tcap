@@ -35,12 +35,16 @@ jobs:
             exit 1
           fi
       - name: diff check
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          zero_sha="0000000000000000000000000000000000000000"
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
-          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "$zero_sha" ]; then
-            git diff --check "${{ github.event.before }}...HEAD"
+          # A new branch has a zero `before`, and a force push can leave it
+          # unreachable. Without a merge base, check the last commit alone,
+          # against its first parent, so that a merge commit is checked too.
+          if [ -n "$BASE" ] && git merge-base "$BASE" HEAD >/dev/null 2>&1; then
+            git diff --check "$BASE...HEAD"
+          elif git rev-parse -q --verify 'HEAD^' >/dev/null; then
+            git diff --check 'HEAD^' HEAD
           else
             git diff-tree --check --root --no-commit-id -r HEAD
           fi
@@ -120,14 +124,11 @@ jobs:
           cache: true
       - uses: dominikh/staticcheck-action@v1.4.1
         with:
-          # staticcheck v0.8.1 cannot read the export data of Go 1.27.2:
-          # https://github.com/dominikh/go-tools/issues/1832. Commit f1838cc
-          # fixes it; pin the next release once it is tagged.
-          version: v0.7.0-0.dev.0.20261009221906-f1838cc308e5
+          version: v0.8.2
           install-go: false
       - uses: golangci/golangci-lint-action@v9.3.0
         with:
-          version: v2.14.0
+          version: v2.15.0
 
   portability:
     name: portability / ${{ matrix.kind }}
@@ -150,10 +151,10 @@ jobs:
             command: GOOS=linux GOARCH=mips CGO_ENABLED=0 go build ./...
           - kind: macos
             os: macos-latest
-            command: go test ./... -short -count=1 -timeout 900s
+            command: go test ./... -count=1 -timeout 900s
           - kind: windows
             os: windows-latest
-            command: go test ./... -short -count=1 -timeout 900s
+            command: go test ./... -count=1 -timeout 900s
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -165,8 +166,24 @@ jobs:
       - name: go
         run: ${{ matrix.command }}
 
-  vuln:
-    name: vuln
+  module:
+    name: module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: go mod tidy
+        run: go mod tidy -diff
+      - name: go mod verify
+        run: go mod verify
+
+  fuzz-smoke:
+    name: fuzz smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -176,7 +193,8 @@ jobs:
         with:
           go-version: stable
           cache: true
-      - name: govulncheck
+      - name: Fuzz each target briefly
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
-          "$(go env GOPATH)/bin/govulncheck" ./...
+          for target in FuzzParse FuzzParseError FuzzParsePAbortCause FuzzOID; do
+            go test . -run '^$' -fuzz "^${target}\$" -fuzztime 15s
+          done
