@@ -166,7 +166,8 @@ type AUDT struct {
 // encoding of one value, including its tag and length. The data value is in
 // the TC-user's syntax: SingleASN1Type keeps the bytes it was given or
 // received and is checked only for well-formed BER, and OctetAligned and
-// Arbitrary are not checked. Q.773 clause 4.1.1 covers the encoding headers.
+// Arbitrary are checked only as OCTET STRING and BIT STRING encodings, not the
+// octets or bits they carry. Q.773 clause 4.1.1 covers the encoding headers.
 type External struct {
 	DirectReference     OID
 	IndirectReference   *big.Int

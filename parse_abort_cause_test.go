@@ -146,6 +146,25 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "empty EXTERNAL [0] in argument then truncated INTEGER", input: "62164801016c0fa10d020101020101280506012aa0000201", cause: incorrect},
 		{name: "empty EXTERNAL [0] in argument then truncated INTEGER tolerant", input: "62164801016c0fa10d020101020101280506012aa0000201", tolerant: true, cause: incorrect},
 		{name: "empty dialogue EXTERNAL [0] then INTEGER without contents", input: "62144801016b0d280b060700118605010101a0000200", cause: incorrect},
+		// The components of an EXTERNAL or EMBEDDED PDV in an argument are
+		// the TC-user's syntax, which ITU-T X.690 (02/2021) clauses 8.17.1
+		// and 8.18.1 govern. An EXTERNAL without a direct or indirect
+		// reference (clause 8.18.4, Table 2), a non-minimal INTEGER in an
+		// identification (clauses 8.3.2 and 8.14.4) and an arbitrary
+		// encoding with 8 unused bits (clause 8.6.2.2) are encoding faults.
+		// A missing data value or an identification alternative outside [0]
+		// to [5] is an element out of place, where the whole-message check
+		// stops as well.
+		{name: "EXTERNAL without reference in argument and unexpected NULL", input: "62154801016c0ea10c02010102012d2804a00205000500", cause: bad},
+		{name: "EXTERNAL without reference in argument and unexpected NULL tolerant", input: "62154801016c0ea10c02010102012d2804a00205000500", tolerant: true, cause: bad},
+		{name: "non-minimal presentation-context-id in argument and unexpected NULL", input: "62194801016c12a11002010102012d2b08a0048202000182000500", cause: bad},
+		{name: "non-minimal presentation-context-id in argument and unexpected NULL tolerant", input: "62194801016c12a11002010102012d2b08a0048202000182000500", tolerant: true, cause: bad},
+		{name: "arbitrary encoding with 8 unused bits in argument and unexpected NULL", input: "62184801016c11a10f02010102012d280706012a820208000500", cause: bad},
+		{name: "arbitrary encoding with 8 unused bits in argument and unexpected NULL tolerant", input: "62184801016c11a10f02010102012d280706012a820208000500", tolerant: true, cause: bad},
+		{name: "EMBEDDED PDV without data value in argument and unexpected NULL", input: "62184801016c11a10f02010102012d2b07a00581032a03040500", cause: incorrect},
+		{name: "EMBEDDED PDV without data value in argument and unexpected NULL tolerant", input: "62184801016c11a10f02010102012d2b07a00581032a03040500", tolerant: true, cause: incorrect},
+		{name: "identification [6] in argument and unexpected NULL", input: "62174801016c10a10e02010102012d2b06a002860082000500", cause: incorrect},
+		{name: "identification [6] in argument and unexpected NULL tolerant", input: "62174801016c10a10e02010102012d2b06a002860082000500", tolerant: true, cause: incorrect},
 		{name: "codec limit", input: "6203480101", limits: tcap.DecodeLimits{MaxWork: 1}, cause: resource},
 		// A limit met only while inspecting keeps the codec's failure: a
 		// repeated DTID with a long-form length below 128 (Q.773 clause

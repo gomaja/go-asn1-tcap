@@ -23,8 +23,9 @@ func cloneBigInt(v *big.Int) *big.Int {
 	return new(big.Int).Set(v)
 }
 
-// cloneBits copies the octets. The codec clears unused bits when encoding
-// without changing these octets (ITU-T X.690 (02/2021) clause 8.6.2.4).
+// cloneBits copies the octets. The codec clears unused bits when encoding,
+// as ITU-T X.690 (02/2021) clause 11.2.1 requires of CER and DER, without
+// changing these octets.
 func cloneBits(v runtime.BitString) runtime.BitString {
 	v.Bytes = slices.Clone(v.Bytes)
 	return v

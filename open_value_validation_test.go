@@ -44,6 +44,71 @@ func TestOpenValueEncodingValidation(t *testing.T) {
 		{"EMBEDDED PDV doubled identification", "2b08a004850085008200", ber.ErrUnexpectedElement},
 		{"CHARACTER STRING empty identification", "3d04a0008200", ber.ErrUnexpectedElement},
 		{"CHARACTER STRING doubled identification", "3d08a004850085008200", ber.ErrUnexpectedElement},
+		// ITU-T X.690 (02/2021) clauses 8.17.1, 8.18.1 and 8.24.1 fix the
+		// components of an EXTERNAL, EMBEDDED PDV and CHARACTER STRING and
+		// their order; ITU-T X.680 (02/2021) clauses 36.5 and 44.5 list the
+		// identification alternatives. Their implicit tags give their base
+		// types (X.690 clause 8.14.4), including a constructed OCTET STRING
+		// (clause 8.7.1).
+		{"EXTERNAL indirect reference", "2807020101a0020500", nil},
+		{"EXTERNAL direct and indirect references and descriptor", "280d06012a020101070141a0020500", nil},
+		{"EXTERNAL octet-aligned", "280606012a810141", nil},
+		{"EXTERNAL constructed octet-aligned", "280906012aa1040402abcd", nil},
+		{"EXTERNAL arbitrary", "280706012a82020780", nil},
+		{"EXTERNAL constructed arbitrary", "280906012aa20403020080", nil},
+		{"EMBEDDED PDV syntaxes", "2b0ca008a00680012a81012a8200", nil},
+		{"EMBEDDED PDV context-negotiation", "2b0ca008a30680010181012a8200", nil},
+		{"EMBEDDED PDV constructed data value", "2b0aa0028500a2040402abcd", nil},
+		{"CHARACTER STRING syntax", "3d0aa00381012a8203414243", nil},
+		{"EXTERNAL indefinite", "288006012aa00205000000", nil},
+		{"EMBEDDED PDV indefinite", "2b80a0808500000082000000", nil},
+		// X.690 clause 8.18.4, Table 2: the identification of an EXTERNAL is
+		// syntax, presentation-context-id or context-negotiation, so a
+		// direct or an indirect reference is present.
+		{"EXTERNAL without reference", "2804a0020500", ber.ErrInvalidValue},
+		{"EXTERNAL descriptor without reference", "2807070164a0020500", ber.ErrInvalidValue},
+		{"EXTERNAL octet-aligned without reference", "2803810141", ber.ErrInvalidValue},
+		{"EXTERNAL arbitrary without reference", "280482020780", ber.ErrInvalidValue},
+		{"EXTERNAL indefinite without reference", "2880a00205000000", ber.ErrInvalidValue},
+		{"EXTERNAL without reference in a SEQUENCE", "30062804a0020500", ber.ErrInvalidValue},
+		// A component that is missing, repeated or out of its order is an
+		// element out of place (X.690 clause 8.9.2).
+		{"EXTERNAL without encoding", "280306012a", ber.ErrUnexpectedElement},
+		{"EXTERNAL reference after descriptor", "280906012a07014106012a", ber.ErrUnexpectedElement},
+		{"EXTERNAL repeated direct reference", "280a06012a06012aa0020500", ber.ErrUnexpectedElement},
+		{"EXTERNAL repeated indirect reference", "280a020101020101a0020500", ber.ErrUnexpectedElement},
+		{"EXTERNAL indirect reference before direct", "280a02010106012aa0020500", ber.ErrUnexpectedElement},
+		{"EXTERNAL two encodings", "280b06012aa0020500a0020500", ber.ErrUnexpectedElement},
+		{"EXTERNAL encoding [3]", "280506012a8300", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV without data value", "2b07a00581032a0304", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV repeated data value", "2b0ba00581032a030482008200", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV element between identification and data value", "2b0ba00581032a030481008200", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV identification [6]", "2b06a00286008200", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV empty syntaxes", "2b06a002a0008200", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV reversed syntaxes", "2b0ca008a00681012a80012a8200", ber.ErrUnexpectedElement},
+		{"CHARACTER STRING without data value", "3d07a00581032a0304", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV indefinite without data value", "2b80a080850000000000", ber.ErrUnexpectedElement},
+		{"EMBEDDED PDV without data value in an EXTERNAL", "280e06012aa0092b07a00581032a0304", ber.ErrUnexpectedElement},
+		// The form and contents of an identification alternative are those
+		// of its base type (X.690 clause 8.14.4): a primitive, minimal INTEGER
+		// (clauses 8.3.1 and 8.3.2) or a primitive, empty NULL (clauses 8.8.1
+		// and 8.8.2). An arbitrary encoding is a BIT STRING, whose initial
+		// octet is present and below 8 (clause 8.6.2.2).
+		{"EMBEDDED PDV non-minimal presentation-context-id", "2b08a004820200018200", ber.ErrInvalidValue},
+		{"EMBEDDED PDV fixed identification with contents", "2b07a0038501008200", ber.ErrInvalidValue},
+		{"CHARACTER STRING non-minimal presentation-context-id", "3d08a004820200018200", ber.ErrInvalidValue},
+		{"EMBEDDED PDV empty presentation-context-id", "2b06a00282008200", ber.ErrInvalidValue},
+		{"EMBEDDED PDV non-minimal context-negotiation", "2b0da009a3078002000181012a8200", ber.ErrInvalidValue},
+		{"EMBEDDED PDV constructed presentation-context-id", "2b06a002a2008200", ber.ErrInvalidTag},
+		{"EMBEDDED PDV constructed fixed identification", "2b06a002a5008200", ber.ErrInvalidTag},
+		{"EXTERNAL arbitrary without initial octet", "280506012a8200", ber.ErrInvalidValue},
+		{"EXTERNAL arbitrary with 8 unused bits", "280706012a82020800", ber.ErrInvalidValue},
+		// The segments of a constructed octet-aligned or arbitrary encoding
+		// are OCTET STRING or BIT STRING encodings (X.690 clauses 8.7.3 and
+		// 8.6.4.1), and only the last segment of a BIT STRING ends short of
+		// an octet (clause 8.6.4).
+		{"EXTERNAL constructed octet-aligned with NULL segment", "280706012aa1020500", ber.ErrInvalidTag},
+		{"EXTERNAL constructed arbitrary with unused bits before the last segment", "280d06012aa2080302018003020080", ber.ErrInvalidValue},
 	} {
 		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "UserInformation", "Opaque"} {
 			t.Run(tc.name+"/"+kind, func(t *testing.T) {

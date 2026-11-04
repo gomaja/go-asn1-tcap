@@ -40,7 +40,8 @@ func TestMarshalRejectsInvalidExternalBitStrings(t *testing.T) {
 	}
 }
 
-// ITU-T X.690 (02/2021) clause 8.6.2.4 requires unused bits to be zero.
+// Marshal clears unused bits, as ITU-T X.690 (02/2021) clause 11.2.1 requires
+// of CER and DER.
 func TestMarshalClearsUnusedExternalBits(t *testing.T) {
 	for _, place := range []string{"opaque", "user information"} {
 		t.Run(place, func(t *testing.T) {

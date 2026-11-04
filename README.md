@@ -235,7 +235,7 @@ The codec's errors are go-asn1's types and sentinels. To match them with
   invoke ID of 200, are `*ber.ValidationError` (`errors.As`).
 - Malformed BER, including parameter and EXTERNAL single-ASN1-type bytes,
   returns codec errors such as `ber.ErrExtraData`, `ber.ErrTruncated`,
-  `ber.ErrInvalidTag` or `*ber.ElementError`.
+  `ber.ErrInvalidTag`, `ber.ErrInvalidValue` or `*ber.ElementError`.
 - The codec reports a validly encoded element that the ASN.1 does not admit,
   such as one with an unexpected tag, and a missing mandatory component with
   `ber.ErrUnexpectedElement`.
@@ -305,11 +305,13 @@ an `Opaque` EXTERNAL. The codec requires uniDialogue-as with AUDT in a
 Unidirectional (Q.773 clause 4.2.3). This package enforces the Begin's AARQ
 requirement (Q.774 Figure A.5, sheet 3) and Table 3 placement and results in
 both modes. When `Marshal` encodes an AARQ, AARE or AUDT, a nil
-protocol-version is omitted and means the DEFAULT `{version1}`; a non-nil value is encoded,
-including `ProtocolVersion1()` as `80 02 07 80` (X.690 (02/2021) clause 8.9.3).
-When it encodes a BIT STRING, it clears the unused bits of the last octet
-without changing the caller's value (clause 8.6.2.4); an invalid bit length
-is rejected.
+protocol-version is omitted and means the DEFAULT `{version1}`; a non-nil value
+is encoded, including `ProtocolVersion1()` as `80 02 07 80` (X.690 (02/2021)
+clause 8.9.3). When it encodes a protocol-version or an `Arbitrary` value, it
+clears the unused bits of the last octet, as clause 11.2.1 requires of CER and
+DER, without changing the caller's value; an invalid bit length is rejected.
+The TC-user's BER in a parameter or single-ASN1-type stays as given, unused
+bits included.
 
 TCAP's own syntax is the TC message, the component and dialogue syntax, and
 the encoding headers of an EXTERNAL. Parameters and the data values of user
@@ -317,15 +319,22 @@ information and Opaque EXTERNALs are the TC-user's syntax (ITU-T X.690
 (02/2021) clauses 8.15 and 8.18), which Q.773 clause 4.1.1 does not cover.
 Parameters and single-ASN1-type contents keep the BER bytes they were given
 or received; `Parse` in either mode and `Marshal` check only that they are
-well-formed BER. That covers REAL contents (X.690 clause 8.5) and the explicit
-[0] of an EXTERNAL, EMBEDDED PDV or CHARACTER STRING, which must be constructed
-and hold exactly one value (clauses 8.14.3, 8.17.1, 8.18.1 and 8.24.1). Without
-the TC-user's ASN.1, a context-specific or application tag gives no type to
-check. Octet-aligned and arbitrary contents are not checked. The TC-user's
-encoding rules, such as 3GPP TS 29.002 clause 17.1.1 for MAP, are for its own
-codec to apply. A dialogue PDU is TCAP syntax in any of the three encodings. A
-message parsed with `WithTolerance` marshals with TCAP's own fields encoded
-afresh and the TC-user's bytes as received.
+well-formed BER. That covers REAL contents (X.690 clause 8.5) and the
+components of an EXTERNAL, EMBEDDED PDV or CHARACTER STRING (clauses 8.17.1,
+8.18.1 and 8.24.1): their order and number, the contents of their base types
+(clause 8.14.4), the direct or indirect reference that an EXTERNAL's
+identification requires (clause 8.18.4, Table 2), and the explicit [0], which
+must be constructed and hold exactly one value (clause 8.14.3). Without the
+TC-user's ASN.1, any other context-specific or application tag gives no type to
+check. Octet-aligned and arbitrary contents are checked only as OCTET STRING
+and BIT STRING encodings (clauses 8.7 and 8.6): the initial octet of a BIT
+STRING and the segments of a constructed value, not the octets or bits they
+carry. The TC-user's encoding rules, such as 3GPP TS 29.002 clause 17.1.1 for
+MAP, are for its own codec to apply. A dialogue PDU is TCAP syntax in any of
+the three encodings. `Marshal` encodes a message parsed with `WithTolerance`
+with TCAP's own fields afresh and parameters and single-ASN1-type contents as
+received, but it applies the sender rules: it refuses a value that only
+tolerance admits, such as an invoke ID of 200 or an empty transaction ID.
 
 `OID` is a string type, so application context names can be constants.
 `ParseOID` and `Marshal` validate OIDs with go-asn1, which accepts arcs of
