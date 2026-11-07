@@ -109,6 +109,45 @@ func TestOpenValueEncodingValidation(t *testing.T) {
 		// an octet (clause 8.6.4).
 		{"EXTERNAL constructed octet-aligned with NULL segment", "280706012aa1020500", ber.ErrInvalidTag},
 		{"EXTERNAL constructed arbitrary with unused bits before the last segment", "280d06012aa2080302018003020080", ber.ErrInvalidValue},
+		// X.690 clause 8.23.3 encodes a character string as an OCTET STRING,
+		// so a constructed one is checked as its whole value (clause
+		// 8.7.3.1). Clauses 8.23.7 and 8.23.8 encode UniversalString and
+		// BMPString in 4-octet and 2-octet values. X.680 clause 41 with
+		// Tables 8 to 10 gives the characters of NumericString,
+		// PrintableString, IA5String and VisibleString, and clauses 46.3 and
+		// 47.3 give the forms of GeneralizedTime and UTCTime.
+		{"BMPString", "1e020041", nil},
+		{"BMPString split across segments", "3e06040100040141", nil},
+		{"UniversalString", "1c0400000041", nil},
+		{"NumericString", "12053132203334", nil},
+		{"PrintableString", "130f416131202728292b2c2d2e2f3a3d3f", nil},
+		{"IA5String", "1603417f00", nil},
+		{"VisibleString", "1a03207e41", nil},
+		{"UTCTime", "170d3236313130373132303030305a", nil},
+		{"GeneralizedTime with a fraction", "181332303236313130373132303030302e3132335a", nil},
+		{"UniversalString split across segments", "3c080403000000040141", nil},
+		{"indefinite BMPString", "3e800401000401410000", nil},
+		{"BMPString with a nested segment", "3e082406040100040141", nil},
+		{"BMPString of one octet", "1e0100", ber.ErrInvalidValue},
+		{"BMPString of three octets", "1e03004100", ber.ErrInvalidValue},
+		{"BMPString lone surrogate", "1e02d800", ber.ErrInvalidValue},
+		{"constructed BMPString of one octet", "3e03040100", ber.ErrInvalidValue},
+		{"UniversalString of three octets", "1c03000000", ber.ErrInvalidValue},
+		{"UniversalString above U+10FFFF", "1c0400110000", ber.ErrInvalidValue},
+		{"NumericString letter", "120141", ber.ErrInvalidValue},
+		{"constructed NumericString with a letter in its second segment", "3206040131040141", ber.ErrInvalidValue},
+		{"PrintableString exclamation mark", "130121", ber.ErrInvalidValue},
+		{"IA5String octet above 7F", "1601ff", ber.ErrInvalidValue},
+		{"VisibleString control character", "1a011f", ber.ErrInvalidValue},
+		{"UTCTime month 13", "170d3236313330353132303030305a", ber.ErrInvalidValue},
+		{"UTCTime second 60", "170d3236313130373132303036305a", ber.ErrInvalidValue},
+		{"GeneralizedTime not a time", "1801ff", ber.ErrInvalidValue},
+		{"UniversalString surrogate", "1c040000d800", ber.ErrInvalidValue},
+		{"BMPString surrogate pair", "1e04d800dc00", ber.ErrInvalidValue},
+		{"constructed BMPString with a nested segment of one octet", "3e052403040100", ber.ErrInvalidValue},
+		{"GeneralizedTime 29 February of a common year", "180b323032363032323931325a", ber.ErrInvalidValue},
+		{"UTCTime 30 February", "170b303030323330313230305a", ber.ErrInvalidValue},
+		{"UTCTime offset without minutes", "170d323631313037313230302b3035", ber.ErrInvalidValue},
 	} {
 		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "UserInformation", "Opaque"} {
 			t.Run(tc.name+"/"+kind, func(t *testing.T) {

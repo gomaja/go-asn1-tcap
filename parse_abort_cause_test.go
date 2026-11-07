@@ -164,6 +164,14 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "EMBEDDED PDV without data value in argument and unexpected NULL tolerant", input: "62184801016c11a10f02010102012d2b07a00581032a03040500", tolerant: true, cause: incorrect},
 		{name: "identification [6] in argument and unexpected NULL", input: "62174801016c10a10e02010102012d2b06a002860082000500", cause: incorrect},
 		{name: "identification [6] in argument and unexpected NULL tolerant", input: "62174801016c10a10e02010102012d2b06a002860082000500", tolerant: true, cause: incorrect},
+		// The characters of a restricted string in an argument are checked
+		// too (ITU-T X.690 (02/2021) clause 8.23, X.680 (02/2021) clause 41).
+		// A wrong one is an encoding fault, which the codec meets before a
+		// misplaced NULL or a DTID in a Begin.
+		{name: "NumericString letter in argument and unexpected NULL", input: "62124801016c0ba1090201010201011201410500", cause: bad},
+		{name: "NumericString letter in argument and unexpected NULL tolerant", input: "62124801016c0ba1090201010201011201410500", tolerant: true, cause: bad},
+		{name: "BMPString of one octet in argument after a DTID", input: "62104901016c0ba1090201010201011e0100", cause: bad},
+		{name: "BMPString of one octet in argument after a DTID tolerant", input: "62104901016c0ba1090201010201011e0100", tolerant: true, cause: bad},
 		// A limit met only while inspecting keeps the codec's failure: a
 		// repeated DTID with a long-form length below 128 (Q.773 clause
 		// 4.1.1), and a truncated NULL.
