@@ -327,12 +327,13 @@ information and Opaque EXTERNALs are the TC-user's syntax (ITU-T X.690
 Parameters and single-ASN1-type contents keep the BER bytes they were given
 or received; `Parse` in either mode and `Marshal` check only that they are
 well-formed BER. go-asn1 applies the rules it has for universal types wherever
-they appear, such as the contents of a REAL or the components of an EXTERNAL,
-EMBEDDED PDV or CHARACTER STRING. Not every X.690 rule is among them: the
-length of a BMPString, for one, is not checked. Without the TC-user's ASN.1, a
-context-specific or application tag outside those gives no type to check.
-Octet-aligned and arbitrary contents are checked only as OCTET STRING and BIT
-STRING encodings, not the octets or bits they carry.
+they appear, such as the contents of a REAL, a restricted character string or a
+time, or the components of an EXTERNAL, EMBEDDED PDV or CHARACTER STRING. Not
+every X.690 rule is among them: the escape sequences of a GeneralString or a
+TeletexString (clause 8.23.5), for example, are not checked. Without the
+TC-user's ASN.1, a context-specific or application tag outside those gives no
+type to check. Octet-aligned and arbitrary contents are checked only as OCTET
+STRING and BIT STRING encodings, not the octets or bits they carry.
 `TestOpenValueEncodingValidation` pins the forms refused. The TC-user's
 encoding rules, such as 3GPP TS 29.002 clause 17.1.1 for MAP, are for its own
 codec to apply. A dialogue PDU is TCAP syntax in any of the three encodings.
