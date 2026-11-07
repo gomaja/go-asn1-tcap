@@ -148,6 +148,26 @@ func TestOpenValueEncodingValidation(t *testing.T) {
 		{"GeneralizedTime 29 February of a common year", "180b323032363032323931325a", ber.ErrInvalidValue},
 		{"UTCTime 30 February", "170b303030323330313230305a", ber.ErrInvalidValue},
 		{"UTCTime offset without minutes", "170d323631313037313230302b3035", ber.ErrInvalidValue},
+		// X.680 clause 41.15 ends BMPString at cell U+FFFD. X.690 clause
+		// 8.23.9 lets a BMPString or a UniversalString carry the control
+		// functions of ISO/IEC 6429, such as LF, CR or a CSI sequence, but
+		// not announcers (a), designating escape sequences (b) or invoking
+		// functions such as SHIFT OUT (c). Clause 8.23.10 excludes escape
+		// sequences from a UTF8String, and clause 8.23.5.3 with Table 3
+		// from an IA5String. A sequence split across segments counts.
+		{"BMPString U+FFFD", "1e02fffd", nil},
+		{"BMPString LF and CR", "1e04000a000d", nil},
+		{"UniversalString CSI sequence", "1c100000001b0000005b000000310000006d", nil},
+		{"BMPString U+FFFE", "1e02fffe", ber.ErrInvalidValue},
+		{"BMPString U+FFFF", "1e02ffff", ber.ErrInvalidValue},
+		{"BMPString announcer", "1e06001b00200046", ber.ErrInvalidValue},
+		{"BMPString designation", "1e06001b00280042", ber.ErrInvalidValue},
+		{"BMPString SHIFT OUT", "1e02000e", ber.ErrInvalidValue},
+		{"constructed BMPString with ESC N split across segments", "3e080402001b0402004e", ber.ErrInvalidValue},
+		{"UniversalString SHIFT OUT", "1c040000000e", ber.ErrInvalidValue},
+		{"UTF8String ESC N", "0c021b4e", ber.ErrInvalidValue},
+		{"IA5String ESC N", "16021b4e", ber.ErrInvalidValue},
+		{"constructed IA5String with ESC N split across segments", "360604011b04014e", ber.ErrInvalidValue},
 	} {
 		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "UserInformation", "Opaque"} {
 			t.Run(tc.name+"/"+kind, func(t *testing.T) {

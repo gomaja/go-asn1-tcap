@@ -105,6 +105,12 @@ func TestParsePAbortCause(t *testing.T) {
 		// universal tag gives its type wherever it stands.
 		{name: "reserved REAL base after DTID", input: "67084901010903b00001", cause: bad},
 		{name: "reserved REAL base after DTID tolerant", input: "67084901010903b00001", tolerant: true, cause: bad},
+		// So does a BMPString after the OTID of a Begin: U+FFFF, a cell
+		// ITU-T X.680 (02/2021) clause 41.15 excludes, is an encoding
+		// fault, while a valid character only misplaces the element.
+		{name: "BMPString U+FFFF after OTID", input: "62074801011e02ffff", cause: bad},
+		{name: "BMPString U+FFFF after OTID tolerant", input: "62074801011e02ffff", tolerant: true, cause: bad},
+		{name: "BMPString after OTID", input: "62074801011e020041", cause: incorrect},
 		// An empty OTID violates SIZE (1..4) but keeps the dialogue portion
 		// in its place, where application-context-name [1], an EXPLICIT
 		// tag, must be constructed (ITU-T X.690 (02/2021) clause 8.14.3).
@@ -166,10 +172,13 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "identification [6] in argument and unexpected NULL tolerant", input: "62174801016c10a10e02010102012d2b06a002860082000500", tolerant: true, cause: incorrect},
 		// The characters of a restricted string in an argument are checked
 		// too (ITU-T X.690 (02/2021) clause 8.23, X.680 (02/2021) clause 41).
-		// A wrong one is an encoding fault, which the codec meets before a
+		// A wrong one, such as a SHIFT OUT in a BMPString (X.690 clause
+		// 8.23.9 c), is an encoding fault, which the codec meets before a
 		// misplaced NULL or a DTID in a Begin.
 		{name: "NumericString letter in argument and unexpected NULL", input: "62124801016c0ba1090201010201011201410500", cause: bad},
 		{name: "NumericString letter in argument and unexpected NULL tolerant", input: "62124801016c0ba1090201010201011201410500", tolerant: true, cause: bad},
+		{name: "BMPString SHIFT OUT in argument and unexpected NULL", input: "62134801016c0ca10a0201010201011e02000e0500", cause: bad},
+		{name: "BMPString SHIFT OUT in argument and unexpected NULL tolerant", input: "62134801016c0ca10a0201010201011e02000e0500", tolerant: true, cause: bad},
 		{name: "BMPString of one octet in argument after a DTID", input: "62104901016c0ba1090201010201011e0100", cause: bad},
 		{name: "BMPString of one octet in argument after a DTID tolerant", input: "62104901016c0ba1090201010201011e0100", tolerant: true, cause: bad},
 		// A limit met only while inspecting keeps the codec's failure: a
