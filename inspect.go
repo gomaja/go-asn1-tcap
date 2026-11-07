@@ -122,16 +122,16 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 	}
 	dialogueFailure := isDialogueFailure(data, failure)
 	var dialogue *Dialogue
-	for _, data := range children.leading {
-		t, _, value, delimErr := ber.DecodeTLV(data, opts...)
+	for _, child := range children.leading {
+		t, _, value, delimErr := ber.DecodeTLV(child, opts...)
 		if delimErr != nil {
-			t, _ = ber.PeekTag(data)
-			value = inspectedContents(data)
+			t, _ = ber.PeekTag(child)
+			value = inspectedContents(child)
 		}
 		switch t.Number {
 		case 11:
 			var w wire.DialoguePortion
-			err := w.UnmarshalBER(data, opts...)
+			err := w.UnmarshalBER(child, opts...)
 			var d *Dialogue
 			if err == nil {
 				d, err = decodeDialogue(&w, pe.MessageType)
@@ -151,6 +151,12 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			if dialogueFailure {
 				pe.Portion = PortionDialogue
 				return pe
+			}
+			if !ber.ToleranceEnabled(opts) {
+				if err := messageDialogueFailure(data, children, opts); err != nil {
+					pe.Portion, pe.Err = PortionDialogue, err
+					return pe
+				}
 			}
 			dialogue = d
 		case 12:
@@ -202,7 +208,7 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 			// Q.773 clause 3.1: ComponentPortion has SIZE (1..MAX).
 			if index == 0 {
 				var portion wire.ComponentPortion
-				if err := portion.UnmarshalBER(data, opts...); err != nil {
+				if err := portion.UnmarshalBER(child, opts...); err != nil {
 					pe.Portion, pe.Err = PortionComponent, err
 					return pe
 				}
@@ -210,6 +216,45 @@ func inspectFailure(data []byte, opts []ber.DecodeOption, transactionOnly bool, 
 		}
 	}
 	return pe
+}
+
+// The codec applies Q.773 (06/97) clause 4.2.3 to the message only after its
+// BER checks, so an encoding fault in a component hides a dialogue portion
+// the clause refuses. Ask the codec about the message without its component
+// portion: an incorrect dialogue portion aborts the dialogue (Q.774 (06/97)
+// clause 3.2.2.1), so its failure goes first. Only a failure the codec locates
+// at the dialogue portion counts, and a limit met here changes nothing.
+func messageDialogueFailure(data []byte, children messageChildren, opts []ber.DecodeOption) error {
+	contents := inspectedContents(data)
+	end := 0
+	for _, child := range children.leading {
+		if applicationChild(child, 12) {
+			break
+		}
+		end += len(child)
+	}
+	t, _ := ber.PeekTag(data)
+	probe, err := ber.EncodeTLV(t, contents[:end])
+	if err != nil {
+		return nil
+	}
+	var w wire.TCMessage
+	err = w.UnmarshalBER(probe, opts...)
+	if errors.Is(err, ber.ErrResourceLimit) || !isDialogueFailure(probe, err) {
+		return nil
+	}
+	// Shortening the outer length may shorten its header. Keep both codec
+	// locations relative to the original input, whose leading children match.
+	if shift := len(data) - len(contents) - (len(probe) - end); shift != 0 {
+		var decoded *wire.DecodeError
+		var validation *ber.ValidationError
+		if errors.As(err, &decoded) && errors.As(err, &validation) {
+			offset := *validation.Offset + shift
+			validation.Offset = &offset
+			decoded.Cause = ber.LocateDecodeError(validation, ber.LocateDecodedElement(data, "TCAPMessages.TCMessage", opts))
+		}
+	}
+	return err
 }
 
 // Q.773 (06/97) clause 4.1.1 governs encoding; its Annex A constraints
