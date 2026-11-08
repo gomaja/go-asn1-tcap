@@ -111,6 +111,13 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "BMPString U+FFFF after OTID", input: "62074801011e02ffff", cause: bad},
 		{name: "BMPString U+FFFF after OTID tolerant", input: "62074801011e02ffff", tolerant: true, cause: bad},
 		{name: "BMPString after OTID", input: "62074801011e020041", cause: incorrect},
+		// A noncharacter, which ISO/IEC 10646:2003 clauses 7 a) and 8
+		// reserve permanently, is an encoding fault too. A GeneralizedTime
+		// with a leap second is valid (ITU-T X.680 (02/2021) clauses 3.7 h)
+		// and 46.3), so it only misplaces the element.
+		{name: "UTF8String U+FDD0 after OTID", input: "62084801010c03efb790", cause: bad},
+		{name: "UTF8String U+FDD0 after OTID tolerant", input: "62084801010c03efb790", tolerant: true, cause: bad},
+		{name: "GeneralizedTime leap second after OTID", input: "6214480101180f32303136313233313233353936305a", cause: incorrect},
 		// An empty OTID violates SIZE (1..4) but keeps the dialogue portion
 		// in its place, where application-context-name [1], an EXPLICIT
 		// tag, must be constructed (ITU-T X.690 (02/2021) clause 8.14.3).
@@ -179,6 +186,12 @@ func TestParsePAbortCause(t *testing.T) {
 		{name: "NumericString letter in argument and unexpected NULL tolerant", input: "62124801016c0ba1090201010201011201410500", tolerant: true, cause: bad},
 		{name: "BMPString SHIFT OUT in argument and unexpected NULL", input: "62134801016c0ca10a0201010201011e02000e0500", cause: bad},
 		{name: "BMPString SHIFT OUT in argument and unexpected NULL tolerant", input: "62134801016c0ca10a0201010201011e02000e0500", tolerant: true, cause: bad},
+		{name: "BMPString U+FDD0 in argument and unexpected NULL", input: "62134801016c0ca10a0201010201011e02fdd00500", cause: bad},
+		{name: "BMPString U+FDD0 in argument and unexpected NULL tolerant", input: "62134801016c0ca10a0201010201011e02fdd00500", tolerant: true, cause: bad},
+		// A leap second in a GeneralizedTime is not an encoding fault
+		// (X.680 clause 46.3), so only the NULL is wrong.
+		{name: "GeneralizedTime leap second in argument and unexpected NULL", input: "62204801016c19a117020101020101180f32303136313233313233353936305a0500", cause: incorrect},
+		{name: "GeneralizedTime leap second in argument and unexpected NULL tolerant", input: "62204801016c19a117020101020101180f32303136313233313233353936305a0500", tolerant: true, cause: incorrect},
 		{name: "BMPString of one octet in argument after a DTID", input: "62104901016c0ba1090201010201011e0100", cause: bad},
 		{name: "BMPString of one octet in argument after a DTID tolerant", input: "62104901016c0ba1090201010201011e0100", tolerant: true, cause: bad},
 		// A limit met only while inspecting keeps the codec's failure: a
