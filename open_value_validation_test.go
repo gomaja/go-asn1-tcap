@@ -168,6 +168,31 @@ func TestOpenValueEncodingValidation(t *testing.T) {
 		{"UTF8String ESC N", "0c021b4e", ber.ErrInvalidValue},
 		{"IA5String ESC N", "16021b4e", ber.ErrInvalidValue},
 		{"constructed IA5String with ESC N split across segments", "360604011b04014e", ber.ErrInvalidValue},
+		// X.680 clause 46.3 a) 2) takes the time of day of a GeneralizedTime
+		// from ISO 8601, and the leap second is one of the ISO 8601 terms
+		// X.680 uses (clause 3.7 h), so second 60 is accepted in each form
+		// of clause 46.3. UTCTime's seconds still end at 59 (clause 47.3
+		// b) 2).
+		{"GeneralizedTime leap second", "180f32303136313233313233353936305a", nil},
+		{"GeneralizedTime local leap second with a fraction", "181032303136313233313233353936302e35", nil},
+		{"GeneralizedTime leap second with a time difference", "181332303137303130313030353936302b30313030", nil},
+		{"GeneralizedTime second 61", "180f32303136313233313233353936315a", ber.ErrInvalidValue},
+		// X.680 clauses 41.6, 41.15 and 41.16 admit only the characters of
+		// ISO/IEC 10646. Its 2003 edition, which X.680 clause 2 cites,
+		// permanently reserves cells FFFE and FFFF of every plane (clause
+		// 7 a) and U+FDD0 to U+FDEF (clause 8), so a BMPString, a
+		// UniversalString or a UTF8String cannot hold them. The cells next
+		// to them, such as U+FDCF, U+FDF0 and U+1FFFD, are accepted.
+		{"BMPString U+FDCF and U+FDF0", "1e04fdcffdf0", nil},
+		{"UniversalString U+1FFFD", "1c040001fffd", nil},
+		{"UTF8String U+FDCF and U+FDF0", "0c06efb78fefb7b0", nil},
+		{"BMPString U+FDD0", "1e02fdd0", ber.ErrInvalidValue},
+		{"BMPString U+FDEF", "1e02fdef", ber.ErrInvalidValue},
+		{"UniversalString U+FFFE", "1c040000fffe", ber.ErrInvalidValue},
+		{"UniversalString U+10FFFF", "1c040010ffff", ber.ErrInvalidValue},
+		{"UTF8String U+FDD0", "0c03efb790", ber.ErrInvalidValue},
+		{"UTF8String U+1FFFF", "0c04f09fbfbf", ber.ErrInvalidValue},
+		{"constructed UTF8String with U+FDD0 split across segments", "2c070402efb7040190", ber.ErrInvalidValue},
 	} {
 		for _, kind := range []string{"Invoke", "ReturnError", "Result", "ResultNotLast", "UserInformation", "Opaque"} {
 			t.Run(tc.name+"/"+kind, func(t *testing.T) {
