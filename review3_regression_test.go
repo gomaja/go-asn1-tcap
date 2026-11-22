@@ -319,13 +319,13 @@ func TestReview3NoInvokeIDOfPrimitiveElement(t *testing.T) {
 }
 
 // Parsing deeply segmented IDs (X.690 (02/2021) clause 8.7.3) must not
-// copy or charge the payload at every nesting level. Doubling the payload
-// allocated about 1.2 times as much on Go 1.26.10 and 1.27.3, with and without
-// -race. Allow 1.5 times: copying 120 payloads would cost at least 120 MiB
-// for the smaller input alone, then another 120 MiB when its size doubles.
-// Most of the cost does not grow with the payload, so that ratio cannot see
-// it growing. The ceiling for the smaller input, about 35% over the largest
-// measurement, bounds it.
+// copy or charge the payload at every nesting level. The second input carries
+// 1 MiB more payload than the first, and parsing it allocated between 9.42 and
+// 9.48 MB more on Go 1.26.10, 1.26.11, 1.27.3 and 1.27.4, with and without
+// -race. Allow 16 MiB more: copying the payload at each of the 120 levels
+// would add at least 120 MiB. The difference does not depend on the cost that
+// does not grow with the payload. The ceiling for the smaller input, about 35%
+// over the largest measurement (18.7 MB), bounds that cost.
 func TestReview3SegmentedIDCost(t *testing.T) {
 	var inputs [2][]byte
 	for i := range inputs {
@@ -373,11 +373,11 @@ func TestReview3SegmentedIDCost(t *testing.T) {
 					t.Fatalf("strict Parse allocated %d octets", allocations[i])
 				}
 			}
-			if tolerant && allocations[0] > 64<<20 {
+			if tolerant && allocations[0] > 24<<20 {
 				t.Fatalf("tolerant Parse allocated %d octets", allocations[0])
 			}
-			if tolerant && allocations[1] > allocations[0]*3/2 {
-				t.Fatalf("doubling the payload allocated %d then %d octets, want at most 1.5 times", allocations[0], allocations[1])
+			if tolerant && allocations[1] > allocations[0] && allocations[1]-allocations[0] > 16<<20 {
+				t.Fatalf("another MiB of payload allocated %d more octets (%d then %d), want at most %d", allocations[1]-allocations[0], allocations[0], allocations[1], 16<<20)
 			}
 		})
 	}
