@@ -320,9 +320,8 @@ func TestReview3NoInvokeIDOfPrimitiveElement(t *testing.T) {
 
 // Parsing deeply segmented IDs (X.690 (02/2021) clause 8.7.3) must not
 // copy or charge the payload at every nesting level. The second input carries
-// 1 MiB more payload than the first, and parsing it allocated between 9.42 and
-// 9.48 MB more on Go 1.26.10, 1.26.11, 1.27.3 and 1.27.4, with and without
-// -race. Allow 16 MiB more: copying the payload at each of the 120 levels
+// 1 MiB more payload than the first, and parsing it allocated about 9.4 MB
+// more on Go 1.26.10, 1.26.11, 1.27.3 and 1.27.4, with and without -race. Allow 16 MiB more: copying the payload at each of the 120 levels
 // would add at least 120 MiB. The difference does not depend on the cost that
 // does not grow with the payload. The ceiling for the smaller input, about 35%
 // over the largest measurement (18.7 MB), bounds that cost.
