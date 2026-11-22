@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/dependency-review-action@v5.0.0
+      - uses: actions/dependency-review-action@v5.0.1
         with:
           fail-on-severity: moderate
 
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: stable
           cache: true
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: stable
           cache: true
@@ -141,16 +141,16 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: stable
           cache: true
-      - uses: github/codeql-action/init@v4.39.1
+      - uses: github/codeql-action/init@v4.39.3
         with:
           languages: go
           queries: security-extended,security-and-quality
-      - uses: github/codeql-action/autobuild@v4.39.1
-      - uses: github/codeql-action/analyze@v4.39.1
+      - uses: github/codeql-action/autobuild@v4.39.3
+      - uses: github/codeql-action/analyze@v4.39.3
         with:
           category: codeql-go
       - name: Count scheduled CodeQL alerts
@@ -212,7 +212,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-go@v7.0.0
+      - uses: actions/setup-go@v7.1.0
         with:
           go-version: stable
           cache: true
@@ -228,7 +228,7 @@ jobs:
           exit 0
       - name: Upload secret-detection SARIF
         if: always() && hashFiles('gitleaks.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v4.39.1
+        uses: github/codeql-action/upload-sarif@v4.39.3
         with:
           sarif_file: gitleaks.sarif
           category: gitleaks
